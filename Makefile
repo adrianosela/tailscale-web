@@ -18,9 +18,9 @@ build-wasm: ## Compile Go to WASM (output: src/wasm/main.wasm)
 build-js: ## Bundle the standard JS library with Vite (output: dist/, WASM separate)
 	$(VITE) build
 
-.PHONY: example
-example: build-wasm ## Serve the simple example with hot-reload (requires build-wasm first)
-	(cd examples/simple && ../../node_modules/.bin/vite)
+.PHONY: demo 
+demo: build-wasm ## Serve the dwmo with hot-reload (requires build-wasm first)
+	(cd examples/demo && ../../node_modules/.bin/vite)
 
 .PHONY: docs
 docs: ## Generate TypeDoc API reference (output: docs/)
