@@ -5,9 +5,28 @@
 [![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/master/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/adrianosela/tailscale-web)](https://goreportcard.com/report/github.com/adrianosela/tailscale-web)
 
-Run a [Tailscale](https://tailscale.com) node directly in the browser. Make HTTP requests, open TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
+Run a [Tailscale](https://tailscale.com) device directly in the browser. Make HTTP requests, open TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
+
+<details>
+<summary>**Click here for motivation**</summary>
+
+### Motivation
+
+Tailscale software readily compiles for JavaScript runtimes (via WebAssembly). However, there isn't (as of February 2026) a JavaScript library that makes it easy to set-up Tailscale in the browser. You have to write the Go code yourself, compile it to WebAssembly bytecode (with GOOS=js GOARCH=wasm) yourself, and bundle it yourself alongside the JavaScript shim that sets up the Go runtime (a.k.a. `wasm_exec.js`).
+
+Once you are done doing all that, then you have to implement any network clients you need. For example, if you want to perform HTTP requests over the Tailscale network, you have to implement a bridge (in Go) for your JavaScript to call. This is why this library includes common clients (TCP, ICMP, HTTP... with more to come).
+
+</details>
 
 ## Install
+
+### Web
+
+```html
+<script type="module">
+  import { network } from "https://esm.sh/tailscale-web"
+</script>
+```
 
 ### Node / npm
 
@@ -17,14 +36,6 @@ npm install tailscale-web
 
 ```ts
 import { network } from "tailscale-web"
-```
-
-### Web (no bundler)
-
-```html
-<script type="module">
-  import { network } from "https://esm.sh/tailscale-web"
-</script>
 ```
 
 ## Quick start
@@ -63,7 +74,9 @@ import { network } from "tailscale-web"
 await network.init({
   hostname: "my-app",
   onAuthRequired(url) {
-    window.open(url, "_blank", "width=600,height=700")
+
+    // Open the URL however your environment allows
+    console.log("Authenticate at:", url)
   },
   onAuthComplete() {
     console.log("connected!")
@@ -74,27 +87,54 @@ const resp = await network.fetch("http://my-server/api/data")
 console.log(await resp.json())
 ```
 
-State is persisted to `localStorage` automatically, so the node reconnects on the next page load without requiring login again.
+In a browser, state is persisted to `localStorage` automatically, so the device reconnects on the next page load without requiring login again. Pass a `storage` adapter in `init()` to use a custom backend.
 
 ## API
 
 ### `network.init(options?)`
 
-Loads the WASM, starts the Tailscale node, and waits until it is online. Must be called before any other method.
+Loads the WASM, starts the Tailscale node, and waits until it is authenticated and ready. Must be called before any other method.
+
+If the node has persisted state it reconnects automatically; otherwise the OAuth flow is started and `onAuthRequired` is called with the login URL. Rejects if the auth URL does not arrive within 60 seconds, or if the user does not complete authentication within 5 minutes.
 
 ```ts
 await network.init({
-  hostname?: string          // device name on the tailnet (default: "tailscale-web")
-  storagePrefix?: string     // localStorage key prefix (default: "tailscale-web")
-  controlUrl?: string        // custom coordination server URL
-  onAuthRequired?: (url: string) => void   // called when login is needed
-  onAuthComplete?: () => void              // called once authenticated
+  // device name on the tailnet (default: "tailscale-web")
+  hostname?: string
+
+  // custom store; defaults to localStorage (browser) or in-memory (elsewhere)
+  storage?: StorageAdapter
+
+  // key prefix for the default store (default: "tailscale-web")
+  // keys are written as "{prefix}_{stateKey}"
+  storagePrefix?: string
+
+  // custom coordination server URL
+  controlUrl?: string
+
+  // called when login is needed
+  onAuthRequired?: (url: string) => void
+
+  // called once authenticated
+  onAuthComplete?: () => void
+})
+```
+
+```ts
+// Example: use sessionStorage as the backend
+await network.init({
+  hostname: "my-app",
+  storage: {
+    get: key => sessionStorage.getItem(key),
+    set: (key, val) => sessionStorage.setItem(key, val),
+  },
+  onAuthRequired(url) { window.open(url, "_blank", "width=600,height=700") },
 })
 ```
 
 ### `network.fetch(url, init?)`
 
-Make an HTTP/HTTPS request through the tailnet. Mirrors the browser `fetch` API.
+Make an HTTP/HTTPS request through the tailnet. Supports `method`, `headers`, and `body`. Does not yet support `AbortSignal`, streaming bodies or responses, or other advanced Fetch API options (`mode`, `credentials`, `cache`, `redirect`).
 
 ```ts
 const resp = await network.fetch("https://internal-service/api", {
@@ -110,19 +150,19 @@ const data = await resp.json()
 
 ### `network.ping(addr)`
 
-ICMP ping a peer and measure round-trip time. `addr` may be a hostname, Tailscale IP, or `host:port`.
+ICMP ping a peer and measure round-trip time. `addr` may be a hostname or Tailscale IP.
 
 ```ts
 const result = await network.ping("my-server")
 // { alive: true, rttMs: 3.2, nodeName: "my-server", nodeIP: "100.x.x.x", ... }
 ```
 
-### `network.dial(addr)`
+### `network.dialTCP(addr)`
 
 Open a raw TCP connection through the tailnet. Returns a `Connection` object.
 
 ```ts
-const conn = await network.dial("my-server:8080")
+const conn = await network.dialTCP("my-server:8080")
 
 conn.onData(data => {
   console.log(new TextDecoder().decode(data))
@@ -173,21 +213,6 @@ const dns = network.getDNS()
 //   magicDNS: boolean
 // }
 ```
-
-### Custom storage
-
-By default state is stored in `localStorage`. Pass a custom adapter before calling `init()` to use a different backend:
-
-```ts
-network.setStorage({
-  get: key => sessionStorage.getItem(key),
-  set: (key, val) => sessionStorage.setItem(key, val),
-})
-
-await network.init({ ... })
-```
-
-Pass `null` to revert to `localStorage`.
 
 ## Notes
 

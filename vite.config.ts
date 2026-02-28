@@ -1,7 +1,7 @@
-import { defineConfig, type Plugin } from "vite"
-import dts from "vite-plugin-dts"
-import { readFileSync } from "fs"
-import { basename } from "path"
+import { defineConfig, type Plugin } from "vite";
+import dts from "vite-plugin-dts";
+import { readFileSync } from "fs";
+import { basename } from "path";
 
 // Emit .wasm files as separate assets rather than inlining them as base64.
 // Rollup replaces import.meta.ROLLUP_FILE_URL_<ref> with the emitted file's URL.
@@ -10,15 +10,15 @@ function wasmPlugin(): Plugin {
     name: "wasm-emit",
     enforce: "pre",
     load(id: string) {
-      if (!id.endsWith(".wasm")) return
+      if (!id.endsWith(".wasm")) return;
       const ref = this.emitFile({
         type: "asset",
         fileName: basename(id),
         source: readFileSync(id),
-      })
-      return `export default import.meta.ROLLUP_FILE_URL_${ref}`
+      });
+      return `export default import.meta.ROLLUP_FILE_URL_${ref}`;
     },
-  }
+  };
 }
 
 export default defineConfig({
@@ -34,4 +34,4 @@ export default defineConfig({
     },
   },
   assetsInclude: ["**/*.wasm"],
-})
+});

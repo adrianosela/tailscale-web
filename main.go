@@ -30,10 +30,9 @@ var tsNet *network.Network
 
 func main() {
 	ns := jsutil.NewObject()
-	ns.Set("setStorage", js.FuncOf(setStorageFn))
 	ns.Set("init", js.FuncOf(initFn))
 	ns.Set("ping", js.FuncOf(pingFn))
-	ns.Set("dial", js.FuncOf(dialFn))
+	ns.Set("dialTCP", js.FuncOf(dialFn))
 	ns.Set("fetch", js.FuncOf(fetchFn))
 	ns.Set("getPrefs", js.FuncOf(getPrefsFn))
 	ns.Set("setAcceptRoutes", js.FuncOf(setAcceptRoutesFn))
@@ -47,24 +46,12 @@ func main() {
 	select {}
 }
 
-// setStorage configures the state store used on the next init() call.
-// Pass an object with get(key)/set(key,val) methods for a custom backend,
-// or null/undefined to revert to the default localStorage store.
-func setStorageFn(this js.Value, args []js.Value) any {
-	if len(args) < 1 || args[0].IsNull() || args[0].IsUndefined() {
-		network.SetCustomStore(nil)
-		return nil
-	}
-	obj := args[0]
-	network.SetCustomStore(storage.NewJSStore(obj.Get("get"), obj.Get("set")))
-	return nil
-}
-
 // init(options?) → Promise<void>
 //
 //	options: {
 //	  hostname?:        string   — device name on the tailnet
-//	  storagePrefix?:   string   — localStorage key prefix (default "tailscale-web")
+//	  storage?:         { get(key): string|null, set(key, val): void } — custom state store
+//	  storagePrefix?:   string   — key prefix for the default store (default "tailscale-web")
 //	  controlUrl?:      string   — custom coordination server URL
 //	  onAuthRequired?:  (url: string) => void
 //	  onAuthComplete?:  () => void
@@ -79,6 +66,9 @@ func initFn(this js.Value, args []js.Value) any {
 			opts := args[0]
 			if v := opts.Get("hostname"); v.Type() == js.TypeString {
 				cfg.Hostname = v.String()
+			}
+			if v := opts.Get("storage"); v.Type() == js.TypeObject {
+				cfg.Store = storage.NewJSStore(v.Get("get"), v.Get("set"))
 			}
 			if v := opts.Get("storagePrefix"); v.Type() == js.TypeString {
 				cfg.StoragePrefix = v.String()

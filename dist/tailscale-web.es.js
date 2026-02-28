@@ -195,7 +195,7 @@
       }, u = (t) => {
         const e = i(t + 0), o = i(t + 8);
         return g.decode(new DataView(this._inst.exports.mem.buffer, e, o));
-      }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), f = Date.now() - performance.now();
+      }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), d = Date.now() - performance.now();
       this.importObject = {
         _gotest: {
           add: (t, e) => t + e,
@@ -224,7 +224,7 @@
           },
           // func nanotime1() int64
           "runtime.nanotime1": (t) => {
-            t >>>= 0, c(t + 8, (f + performance.now()) * 1e6);
+            t >>>= 0, c(t + 8, (d + performance.now()) * 1e6);
           },
           // func walltime() (sec int64, nsec int32)
           "runtime.walltime": (t) => {
@@ -389,18 +389,18 @@
         [this, 6]
       ]), this._idPool = [], this.exited = !1;
       let i = 4096;
-      const s = (f) => {
-        const t = i, e = h.encode(f + "\0");
+      const s = (d) => {
+        const t = i, e = h.encode(d + "\0");
         return new Uint8Array(this.mem.buffer, i, e.length).set(e), i += e.length, i % 8 !== 0 && (i += 8 - i % 8), t;
       }, r = this.argv.length, a = [];
-      this.argv.forEach((f) => {
-        a.push(s(f));
-      }), a.push(0), Object.keys(this.env).sort().forEach((f) => {
-        a.push(s(`${f}=${this.env[f]}`));
+      this.argv.forEach((d) => {
+        a.push(s(d));
+      }), a.push(0), Object.keys(this.env).sort().forEach((d) => {
+        a.push(s(`${d}=${this.env[d]}`));
       }), a.push(0);
       const u = i;
-      if (a.forEach((f) => {
-        this.mem.setUint32(i, f, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
+      if (a.forEach((d) => {
+        this.mem.setUint32(i, d, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
       }), i >= 12288)
         throw new Error("total length of command line and environment variables exceeds limit");
       this._inst.exports.run(r, u), this.exited && this._resolveExitPromise(), await this._exitPromise;
@@ -433,7 +433,7 @@ async function x() {
   );
   n.run(h.instance), _ = !0;
 }
-function d() {
+function f() {
   return globalThis.__tailscaleWeb;
 }
 function T(n) {
@@ -450,48 +450,78 @@ function T(n) {
 }
 const p = {
   /**
-   * Configure the state storage backend.
-   * Must be called before init() if you want a custom store.
-   * Omit (or pass null) to use the default localStorage store.
-   *
-   * @example
-   * network.setStorage({
-   *   get: key => localStorage.getItem(key),
-   *   set: (key, val) => localStorage.setItem(key, val),
-   * })
-   */
-  setStorage(n) {
-    d().setStorage(n);
-  },
-  /**
    * Initialize and connect the Tailscale node. Must be called before any
-   * other method. Resolves once the node is online and ready.
+   * other method. Resolves once the node is authenticated and ready.
    *
    * If the node has persisted state from a previous session it reconnects
    * automatically. Otherwise the OAuth flow is triggered via onAuthRequired.
+   * Rejects if the auth URL does not arrive within 60 seconds, or if the
+   * user does not complete authentication within 5 minutes.
+   *
+   * @example
+   * await network.init({
+   *   hostname: "my-app",
+   *   onAuthRequired(url) {
+   *     window.open(url, "_blank", "width=600,height=700")
+   *   },
+   *   onAuthComplete() {
+   *     console.log("connected!")
+   *   },
+   * })
+   *
+   * @example
+   * // Custom storage backend (e.g. sessionStorage or any key/value store)
+   * await network.init({
+   *   hostname: "my-app",
+   *   storage: {
+   *     get: key => sessionStorage.getItem(key),
+   *     set: (key, val) => sessionStorage.setItem(key, val),
+   *   },
+   *   onAuthRequired(url) { console.log("Authenticate at:", url) },
+   * })
    */
   async init(n = {}) {
-    return await x(), d().init(n);
+    return await x(), f().init(n);
   },
   /**
-   * Probe TCP connectivity to addr and measure round-trip time.
-   * addr may be "host" (port 443 assumed) or "host:port".
+   * Send an ICMP ping to addr and measure round-trip time.
+   * addr may be a hostname or Tailscale IP.
+   *
+   * @example
+   * const result = await network.ping("my-server")
+   * if (result.alive) {
+   *   console.log(`rtt: ${result.rttMs.toFixed(3)} ms  ip: ${result.nodeIP}`)
+   * } else {
+   *   console.warn("unreachable:", result.err)
+   * }
    */
   async ping(n) {
-    return d().ping(n);
+    return f().ping(n);
   },
   /**
    * Open a raw TCP connection through the Tailscale network.
    * Returns a Connection object for sending and receiving data.
+   *
+   * @example
+   * const conn = await network.dialTCP("my-server:8080")
+   *
+   * conn.onData(data => {
+   *   console.log(new TextDecoder().decode(data))
+   * })
+   *
+   * conn.write("hello\n")
+   * conn.close()
    */
-  async dial(n) {
-    const h = await d().dial(n);
+  async dialTCP(n) {
+    const h = await f().dialTCP(n);
     return {
       onData(g) {
         h.onData(g);
       },
       write(g) {
-        h.write(typeof g == "string" ? new TextEncoder().encode(g) : g);
+        h.write(
+          typeof g == "string" ? new TextEncoder().encode(g) : g
+        );
       },
       close() {
         h.close();
@@ -499,53 +529,99 @@ const p = {
     };
   },
   /**
-   * Make an HTTP request through the Tailscale network.
-   * Mirrors the browser Fetch API signature.
+   * Make an HTTP request through the Tailscale network. Supports method,
+   * headers, and body. Does not yet support AbortSignal, streaming bodies
+   * or responses, or other advanced Fetch API options.
+   *
+   * @example
+   * const resp = await network.fetch("https://internal-service/api", {
+   *   method: "POST",
+   *   headers: { "Content-Type": "application/json" },
+   *   body: JSON.stringify({ key: "value" }),
+   * })
+   * console.log(resp.status, resp.ok)
+   * const data = await resp.json()
    */
   async fetch(n, h = {}) {
-    return T(await d().fetch(n, h));
+    return T(await f().fetch(n, h));
   },
   /**
    * Return the current preferences (acceptRoutes, exitNodeId).
-   * Synchronous — no await needed.
+   * Synchronous — no await needed. Must be called after init() resolves.
+   *
+   * @example
+   * const { acceptRoutes, exitNodeId } = network.getPrefs()
+   * console.log("exit node:", exitNodeId || "(none)")
    */
   getPrefs() {
-    return d().getPrefs();
+    return f().getPrefs();
   },
   /**
    * Enable or disable acceptance of subnet routes advertised by peers.
    * Equivalent to `tailscale set --accept-routes`.
+   *
+   * @example
+   * await network.setAcceptRoutes(true)
    */
   async setAcceptRoutes(n) {
-    return d().setAcceptRoutes(n);
+    return f().setAcceptRoutes(n);
   },
   /**
    * Return all peers that advertise exit-node capability.
-   * Synchronous — no await needed.
+   * Synchronous — no await needed. Returns an empty array if called before init() resolves.
+   *
+   * @example
+   * const nodes = network.listExitNodes()
+   * for (const n of nodes) {
+   *   console.log(n.hostName, n.tailscaleIP, n.online ? "online" : "offline")
+   * }
    */
   listExitNodes() {
-    return Array.from(d().listExitNodes());
+    return Array.from(f().listExitNodes());
   },
   /**
    * Activate an exit node by its stable node ID.
    * Pass an empty string (or omit) to clear the exit node.
+   *
+   * @example
+   * // Activate the first available online exit node
+   * const node = network.listExitNodes().find(n => n.online)
+   * if (node) await network.setExitNode(node.id)
+   *
+   * @example
+   * // Clear the active exit node
+   * await network.setExitNode()
    */
   async setExitNode(n = "") {
-    return d().setExitNode(n);
+    return f().setExitNode(n);
   },
   /**
    * Return the full routing table (self + all peers).
-   * Synchronous — no await needed.
+   * Synchronous — no await needed. Returns an empty array if called before init() resolves.
+   *
+   * @example
+   * const routes = network.getRoutes()
+   * for (const r of routes) {
+   *   console.log(r.prefix, "via", r.via, r.isExitRoute ? "(exit)" : "")
+   * }
    */
   getRoutes() {
-    return Array.from(d().getRoutes());
+    return Array.from(f().getRoutes());
   },
   /**
    * Return the current Tailscale-managed DNS configuration.
-   * Synchronous — no await needed.
+   * Synchronous — no await needed. Returns an empty DNSInfo object if called before init() resolves.
+   *
+   * @example
+   * const dns = network.getDNS()
+   * console.log("resolvers:", dns.resolvers)
+   * console.log("MagicDNS:", dns.magicDNS)
+   * for (const [suffix, resolvers] of Object.entries(dns.routes)) {
+   *   console.log(`split-DNS: ${suffix} → ${resolvers.join(", ")}`)
+   * }
    */
   getDNS() {
-    return d().getDNS();
+    return f().getDNS();
   }
 };
 export {

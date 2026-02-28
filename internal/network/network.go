@@ -28,27 +28,23 @@ import (
 	"tailscale.com/wgengine/netstack"
 )
 
-// customStore is set via SetCustomStore before Connect is called.
-var customStore ipn.StateStore
-
-// SetCustomStore sets a custom state store to use on the next Connect call.
-// Pass nil to revert to the default localStorage-backed store.
-func SetCustomStore(s ipn.StateStore) {
-	customStore = s
-}
-
 // Config holds configuration for the Tailscale node.
 type Config struct {
 	// Hostname is the name this device will appear as on the tailnet.
 	Hostname string
 
-	// StoragePrefix is the localStorage key namespace when using the default store.
-	// Defaults to "tailscale-web".
+	// StoragePrefix is the key namespace used by the default localStorage store.
+	// Defaults to "tailscale-web". Keys are written as "{prefix}_{stateKey}".
+	// Ignored when Store is set explicitly.
 	StoragePrefix string
 
 	// ControlURL overrides the Tailscale coordination server URL.
 	// Defaults to the public Tailscale control server.
 	ControlURL string
+
+	// Store is the state store to use. If nil, defaults to localStorage when
+	// available (browser), or an in-memory store otherwise.
+	Store ipn.StateStore
 }
 
 // OnAuthRequired is called with the OAuth URL when interactive login is needed.
@@ -132,14 +128,19 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	n := &Network{}
 	sys := tsd.NewSystem()
 
-	// Resolve the state store: prefer custom, fall back to localStorage.
-	store := customStore
+	// Resolve the state store: prefer explicit, then localStorage, then in-memory.
+	store := cfg.Store
 	if store == nil {
-		prefix := cfg.StoragePrefix
-		if prefix == "" {
-			prefix = "tailscale-web"
+		if isLocalStorageAvailable() {
+			prefix := cfg.StoragePrefix
+			if prefix == "" {
+				prefix = "tailscale-web"
+			}
+			store = newLocalStorageStore(prefix, logf)
+		} else {
+			logf("tailscale-web: localStorage not available, using in-memory store (state will not persist)")
+			store = newMemStore()
 		}
-		store = newLocalStorageStore(prefix, logf)
 	}
 	sys.Set(store)
 

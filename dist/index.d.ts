@@ -1,5 +1,5 @@
 export declare interface Connection {
-    /** Register a handler for incoming data. Call before writing. */
+    /** Register a handler for incoming data. Must be called before write() — data can arrive as soon as the connection is established. */
     onData(handler: (data: Uint8Array) => void): void;
     /** Send data over the connection. Accepts a Uint8Array or a string. */
     write(data: Uint8Array | string): void;
@@ -40,7 +40,13 @@ export declare interface ExitNode {
 export declare interface InitOptions {
     /** Device name as it appears on the tailnet. Default: "tailscale-web" */
     hostname?: string;
-    /** localStorage key prefix when using the default store. Default: "tailscale-web" */
+    /**
+     * Custom storage backend for persisting Tailscale state.
+     * If omitted, defaults to localStorage in browser environments,
+     * or an in-memory store (no persistence) elsewhere.
+     */
+    storage?: StorageAdapter | null;
+    /** Key prefix used by the default localStorage store. Keys are written as "{prefix}_{stateKey}". Default: "tailscale-web" */
     storagePrefix?: string;
     /** Override the Tailscale coordination server URL. */
     controlUrl?: string;
@@ -52,68 +58,144 @@ export declare interface InitOptions {
 
 export declare const network: {
     /**
-     * Configure the state storage backend.
-     * Must be called before init() if you want a custom store.
-     * Omit (or pass null) to use the default localStorage store.
-     *
-     * @example
-     * network.setStorage({
-     *   get: key => localStorage.getItem(key),
-     *   set: (key, val) => localStorage.setItem(key, val),
-     * })
-     */
-    setStorage(adapter: StorageAdapter | null): void;
-    /**
      * Initialize and connect the Tailscale node. Must be called before any
-     * other method. Resolves once the node is online and ready.
+     * other method. Resolves once the node is authenticated and ready.
      *
      * If the node has persisted state from a previous session it reconnects
      * automatically. Otherwise the OAuth flow is triggered via onAuthRequired.
+     * Rejects if the auth URL does not arrive within 60 seconds, or if the
+     * user does not complete authentication within 5 minutes.
+     *
+     * @example
+     * await network.init({
+     *   hostname: "my-app",
+     *   onAuthRequired(url) {
+     *     window.open(url, "_blank", "width=600,height=700")
+     *   },
+     *   onAuthComplete() {
+     *     console.log("connected!")
+     *   },
+     * })
+     *
+     * @example
+     * // Custom storage backend (e.g. sessionStorage or any key/value store)
+     * await network.init({
+     *   hostname: "my-app",
+     *   storage: {
+     *     get: key => sessionStorage.getItem(key),
+     *     set: (key, val) => sessionStorage.setItem(key, val),
+     *   },
+     *   onAuthRequired(url) { console.log("Authenticate at:", url) },
+     * })
      */
     init(options?: InitOptions): Promise<void>;
     /**
-     * Probe TCP connectivity to addr and measure round-trip time.
-     * addr may be "host" (port 443 assumed) or "host:port".
+     * Send an ICMP ping to addr and measure round-trip time.
+     * addr may be a hostname or Tailscale IP.
+     *
+     * @example
+     * const result = await network.ping("my-server")
+     * if (result.alive) {
+     *   console.log(`rtt: ${result.rttMs.toFixed(3)} ms  ip: ${result.nodeIP}`)
+     * } else {
+     *   console.warn("unreachable:", result.err)
+     * }
      */
     ping(addr: string): Promise<PingResult>;
     /**
      * Open a raw TCP connection through the Tailscale network.
      * Returns a Connection object for sending and receiving data.
+     *
+     * @example
+     * const conn = await network.dialTCP("my-server:8080")
+     *
+     * conn.onData(data => {
+     *   console.log(new TextDecoder().decode(data))
+     * })
+     *
+     * conn.write("hello\n")
+     * conn.close()
      */
-    dial(addr: string): Promise<Connection>;
+    dialTCP(addr: string): Promise<Connection>;
     /**
-     * Make an HTTP request through the Tailscale network.
-     * Mirrors the browser Fetch API signature.
+     * Make an HTTP request through the Tailscale network. Supports method,
+     * headers, and body. Does not yet support AbortSignal, streaming bodies
+     * or responses, or other advanced Fetch API options.
+     *
+     * @example
+     * const resp = await network.fetch("https://internal-service/api", {
+     *   method: "POST",
+     *   headers: { "Content-Type": "application/json" },
+     *   body: JSON.stringify({ key: "value" }),
+     * })
+     * console.log(resp.status, resp.ok)
+     * const data = await resp.json()
      */
     fetch(url: string, init?: RequestInit_2): Promise<Response_2>;
     /**
      * Return the current preferences (acceptRoutes, exitNodeId).
-     * Synchronous — no await needed.
+     * Synchronous — no await needed. Must be called after init() resolves.
+     *
+     * @example
+     * const { acceptRoutes, exitNodeId } = network.getPrefs()
+     * console.log("exit node:", exitNodeId || "(none)")
      */
     getPrefs(): Prefs;
     /**
      * Enable or disable acceptance of subnet routes advertised by peers.
      * Equivalent to `tailscale set --accept-routes`.
+     *
+     * @example
+     * await network.setAcceptRoutes(true)
      */
     setAcceptRoutes(accept: boolean): Promise<void>;
     /**
      * Return all peers that advertise exit-node capability.
-     * Synchronous — no await needed.
+     * Synchronous — no await needed. Returns an empty array if called before init() resolves.
+     *
+     * @example
+     * const nodes = network.listExitNodes()
+     * for (const n of nodes) {
+     *   console.log(n.hostName, n.tailscaleIP, n.online ? "online" : "offline")
+     * }
      */
     listExitNodes(): ExitNode[];
     /**
      * Activate an exit node by its stable node ID.
      * Pass an empty string (or omit) to clear the exit node.
+     *
+     * @example
+     * // Activate the first available online exit node
+     * const node = network.listExitNodes().find(n => n.online)
+     * if (node) await network.setExitNode(node.id)
+     *
+     * @example
+     * // Clear the active exit node
+     * await network.setExitNode()
      */
     setExitNode(id?: string): Promise<void>;
     /**
      * Return the full routing table (self + all peers).
-     * Synchronous — no await needed.
+     * Synchronous — no await needed. Returns an empty array if called before init() resolves.
+     *
+     * @example
+     * const routes = network.getRoutes()
+     * for (const r of routes) {
+     *   console.log(r.prefix, "via", r.via, r.isExitRoute ? "(exit)" : "")
+     * }
      */
     getRoutes(): Route[];
     /**
      * Return the current Tailscale-managed DNS configuration.
-     * Synchronous — no await needed.
+     * Synchronous — no await needed. Returns an empty DNSInfo object if called before init() resolves.
+     *
+     * @example
+     * const dns = network.getDNS()
+     * console.log("resolvers:", dns.resolvers)
+     * console.log("MagicDNS:", dns.magicDNS)
+     * for (const [suffix, resolvers] of Object.entries(dns.routes)) {
+     *   console.log(`split-DNS: ${suffix} → ${resolvers.join(", ")}`)
+     * }
      */
     getDNS(): DNSInfo;
 };

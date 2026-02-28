@@ -5,11 +5,45 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"syscall/js"
 
 	"tailscale.com/ipn"
 	"tailscale.com/types/logger"
 )
+
+// isLocalStorageAvailable reports whether the browser localStorage API is present.
+func isLocalStorageAvailable() bool {
+	ls := js.Global().Get("localStorage")
+	return !ls.IsUndefined() && !ls.IsNull()
+}
+
+// memStore is an in-memory ipn.StateStore. State is not persisted across sessions.
+type memStore struct {
+	mu   sync.Mutex
+	data map[ipn.StateKey][]byte
+}
+
+func newMemStore() *memStore {
+	return &memStore{data: make(map[ipn.StateKey][]byte)}
+}
+
+func (s *memStore) ReadState(id ipn.StateKey) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.data[id]
+	if !ok {
+		return nil, ipn.ErrStateNotExist
+	}
+	return v, nil
+}
+
+func (s *memStore) WriteState(id ipn.StateKey, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[id] = data
+	return nil
+}
 
 // localStorageStore is the default ipn.StateStore, backed by browser localStorage.
 type localStorageStore struct {
