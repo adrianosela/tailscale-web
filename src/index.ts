@@ -1,4 +1,5 @@
 import "./wasm/wasm_exec.js"
+import wasmUrl from "./wasm/main.wasm"
 
 let wasmReady = false
 
@@ -6,7 +7,7 @@ async function ensureWasm(): Promise<void> {
   if (wasmReady) return
   const go = new (globalThis as any).Go()
   const result = await WebAssembly.instantiateStreaming(
-    fetch(new URL("./wasm/main.wasm", import.meta.url)),
+    fetch(wasmUrl),
     go.importObject,
   )
   go.run(result.instance)
@@ -39,8 +40,38 @@ export interface InitOptions {
 
 export interface PingResult {
   alive: boolean
-  /** Round-trip time in milliseconds (TCP SYN). Only set when alive is true. */
+  /** Round-trip time in milliseconds. Only meaningful when alive is true. */
   rttMs: number
+  /** MagicDNS name of the destination peer. */
+  nodeName: string
+  /** Tailscale IP of the destination. */
+  nodeIP: string
+  /** Direct UDP endpoint used (e.g. "1.2.3.4:56789"), if a direct path exists. */
+  endpoint: string
+  /** DERP relay region code (e.g. "nyc") if traffic was relayed; empty if direct. */
+  derpRegionCode: string
+  /** Error reason when alive is false. */
+  err: string
+}
+
+export interface ExitNode {
+  /** Stable node ID — pass to setExitNode() to activate. */
+  id: string
+  hostName: string
+  /** MagicDNS FQDN (ends with a dot). */
+  dnsName: string
+  /** Primary Tailscale IPv4 address. */
+  tailscaleIP: string
+  /** Whether this node is the currently active exit node. */
+  active: boolean
+  online: boolean
+}
+
+export interface Prefs {
+  /** Whether subnet routes advertised by peers are accepted. */
+  acceptRoutes: boolean
+  /** Stable node ID of the active exit node, or empty string if none. */
+  exitNodeId: string
 }
 
 export interface Connection {
@@ -52,7 +83,7 @@ export interface Connection {
   close(): void
 }
 
-export interface TsResponse {
+export interface Response {
   status: number
   statusText: string
   ok: boolean
@@ -63,7 +94,31 @@ export interface TsResponse {
   bytes(): Promise<Uint8Array>
 }
 
-export interface FetchInit {
+export interface Route {
+  /** CIDR prefix (e.g. "10.0.0.0/24" or "0.0.0.0/0"). */
+  prefix: string
+  /** Display name of the advertising node, or "self". */
+  via: string
+  /** Whether this node is the primary (active) router for the prefix. */
+  isPrimary: boolean
+  /** Whether this is a default/exit route (0.0.0.0/0 or ::/0). */
+  isExitRoute: boolean
+}
+
+export interface DNSInfo {
+  /** Global nameservers. */
+  resolvers: string[]
+  /** Split-DNS map: suffix → dedicated resolver addresses. */
+  routes: Record<string, string[]>
+  /** Search/split-DNS domains. */
+  domains: string[]
+  /** Custom DNS records pushed by the control plane. */
+  extraRecords: { name: string; type: string; value: string }[]
+  /** Whether MagicDNS proxied resolution is enabled. */
+  magicDNS: boolean
+}
+
+export interface RequestInit {
   method?: string
   headers?: Record<string, string>
   body?: string | Uint8Array
@@ -77,7 +132,7 @@ function wrapResponse(raw: {
   ok: boolean
   headers: Record<string, string>
   body: Uint8Array
-}): TsResponse {
+}): Response {
   return {
     status: raw.status,
     statusText: raw.statusText,
@@ -92,7 +147,7 @@ function wrapResponse(raw: {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const network = {
+export const network = {
   /**
    * Configure the state storage backend.
    * Must be called before init() if you want a custom store.
@@ -151,9 +206,56 @@ const network = {
    * Make an HTTP request through the Tailscale network.
    * Mirrors the browser Fetch API signature.
    */
-  async fetch(url: string, init: FetchInit = {}): Promise<TsResponse> {
+  async fetch(url: string, init: RequestInit = {}): Promise<Response> {
     return wrapResponse(await api().fetch(url, init))
+  },
+
+  /**
+   * Return the current preferences (acceptRoutes, exitNodeId).
+   * Synchronous — no await needed.
+   */
+  getPrefs(): Prefs {
+    return api().getPrefs()
+  },
+
+  /**
+   * Enable or disable acceptance of subnet routes advertised by peers.
+   * Equivalent to `tailscale set --accept-routes`.
+   */
+  async setAcceptRoutes(accept: boolean): Promise<void> {
+    return api().setAcceptRoutes(accept)
+  },
+
+  /**
+   * Return all peers that advertise exit-node capability.
+   * Synchronous — no await needed.
+   */
+  listExitNodes(): ExitNode[] {
+    return Array.from(api().listExitNodes() as ArrayLike<ExitNode>)
+  },
+
+  /**
+   * Activate an exit node by its stable node ID.
+   * Pass an empty string (or omit) to clear the exit node.
+   */
+  async setExitNode(id: string = ""): Promise<void> {
+    return api().setExitNode(id)
+  },
+
+  /**
+   * Return the full routing table (self + all peers).
+   * Synchronous — no await needed.
+   */
+  getRoutes(): Route[] {
+    return Array.from(api().getRoutes() as ArrayLike<Route>)
+  },
+
+  /**
+   * Return the current Tailscale-managed DNS configuration.
+   * Synchronous — no await needed.
+   */
+  getDNS(): DNSInfo {
+    return api().getDNS()
   },
 }
 
-export default network

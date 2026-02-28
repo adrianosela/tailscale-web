@@ -1,6 +1,7 @@
 SHELL := /bin/bash
 
-VITE := node_modules/.bin/vite
+VITE    := node_modules/.bin/vite
+TYPEDOC := node_modules/.bin/typedoc
 
 .PHONY: help
 help: ## Print this help menu
@@ -21,7 +22,12 @@ build-js: ## Bundle the JS library with Vite (output: dist/)
 example: build-wasm ## Serve the simple example with hot-reload (requires build-wasm first)
 	(cd examples/simple && ../../node_modules/.bin/vite)
 
+.PHONY: docs
+docs: ## Generate TypeDoc API reference (output: docs/)
+	$(TYPEDOC)
+
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -f src/wasm/main.wasm
 	rm -rf dist/
+	rm -rf docs/

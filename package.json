@@ -1,26 +1,52 @@
 {
   "name": "tailscale-web",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "Run a Tailscale node in the browser via WebAssembly",
+  "type": "module",
+  "main": "./dist/tailscale-web.umd.js",
+  "module": "./dist/tailscale-web.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/tailscale-web.es.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/tailscale-web.umd.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build:wasm": "GOOS=js GOARCH=wasm go build -ldflags='-s -w' -o src/wasm/main.wasm",
-    "build": "npm run build:wasm && vite build"
+    "build": "npm run build:wasm && vite build",
+    "docs": "typedoc"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/adrianosela/tailscale-web.git"
   },
-  "keywords": [],
+  "keywords": [
+    "tailscale",
+    "vpn",
+    "wasm",
+    "webassembly",
+    "networking"
+  ],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/adrianosela/tailscale-web/issues"
   },
   "homepage": "https://github.com/adrianosela/tailscale-web#readme",
   "devDependencies": {
+    "typedoc": "^0.28.17",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vite-plugin-dts": "^4.5.4"
   }
 }
