@@ -9,7 +9,7 @@ Run a [Tailscale](https://tailscale.com) node directly in the browser. Make HTTP
 
 ## Install
 
-### npm
+### Node / npm
 
 ```bash
 npm install tailscale-web
@@ -19,7 +19,7 @@ npm install tailscale-web
 import { network } from "tailscale-web"
 ```
 
-### Browser (no bundler)
+### Web (no bundler)
 
 ```html
 <script type="module">
@@ -29,7 +29,7 @@ import { network } from "tailscale-web"
 
 ## Quick start
 
-### Browser
+### Web
 
 ```html
 <!DOCTYPE html>
@@ -55,7 +55,7 @@ import { network } from "tailscale-web"
 </html>
 ```
 
-### npm
+### Node / npm
 
 ```ts
 import { network } from "tailscale-web"
@@ -191,6 +191,5 @@ Pass `null` to revert to `localStorage`.
 
 ## Notes
 
-- **Browser only.** This library uses WebAssembly and browser APIs; it does not run in Node.js.
 - **WASM size.** The Tailscale WASM binary is ~35 MB. It is loaded once and cached by the browser.
 - **Auth persistence.** Tailscale auth state is stored in `localStorage` (or your custom adapter) under a key prefix. Call `localStorage.clear()` or remove the prefixed keys to log out.

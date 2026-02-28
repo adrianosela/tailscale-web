@@ -165,10 +165,16 @@ export const network = {
    * Omit (or pass null) to use the default localStorage store.
    *
    * @example
+   * // Use sessionStorage instead of the default localStorage
    * network.setStorage({
-   *   get: key => localStorage.getItem(key),
-   *   set: (key, val) => localStorage.setItem(key, val),
+   *   get: key => sessionStorage.getItem(key),
+   *   set: (key, val) => sessionStorage.setItem(key, val),
    * })
+   * await network.init({ hostname: "my-app" })
+   *
+   * @example
+   * // Revert to the default localStorage backend
+   * network.setStorage(null)
    */
   setStorage(adapter: StorageAdapter | null): void {
     api().setStorage(adapter)
@@ -180,6 +186,17 @@ export const network = {
    *
    * If the node has persisted state from a previous session it reconnects
    * automatically. Otherwise the OAuth flow is triggered via onAuthRequired.
+   *
+   * @example
+   * await network.init({
+   *   hostname: "my-app",
+   *   onAuthRequired(url) {
+   *     window.open(url, "_blank", "width=600,height=700")
+   *   },
+   *   onAuthComplete() {
+   *     console.log("connected!")
+   *   },
+   * })
    */
   async init(options: InitOptions = {}): Promise<void> {
     await ensureWasm()
@@ -189,6 +206,14 @@ export const network = {
   /**
    * Probe TCP connectivity to addr and measure round-trip time.
    * addr may be "host" (port 443 assumed) or "host:port".
+   *
+   * @example
+   * const result = await network.ping("my-server")
+   * if (result.alive) {
+   *   console.log(`rtt: ${result.rttMs.toFixed(3)} ms  ip: ${result.nodeIP}`)
+   * } else {
+   *   console.warn("unreachable:", result.err)
+   * }
    */
   async ping(addr: string): Promise<PingResult> {
     return api().ping(addr)
@@ -197,6 +222,16 @@ export const network = {
   /**
    * Open a raw TCP connection through the Tailscale network.
    * Returns a Connection object for sending and receiving data.
+   *
+   * @example
+   * const conn = await network.dial("my-server:8080")
+   *
+   * conn.onData(data => {
+   *   console.log(new TextDecoder().decode(data))
+   * })
+   *
+   * conn.write("hello\n")
+   * conn.close()
    */
   async dial(addr: string): Promise<Connection> {
     const raw = await api().dial(addr)
@@ -216,6 +251,15 @@ export const network = {
   /**
    * Make an HTTP request through the Tailscale network.
    * Mirrors the browser Fetch API signature.
+   *
+   * @example
+   * const resp = await network.fetch("https://internal-service/api", {
+   *   method: "POST",
+   *   headers: { "Content-Type": "application/json" },
+   *   body: JSON.stringify({ key: "value" }),
+   * })
+   * console.log(resp.status, resp.ok)
+   * const data = await resp.json()
    */
   async fetch(url: string, init: RequestInit = {}): Promise<Response> {
     return wrapResponse(await api().fetch(url, init))
@@ -224,6 +268,10 @@ export const network = {
   /**
    * Return the current preferences (acceptRoutes, exitNodeId).
    * Synchronous — no await needed.
+   *
+   * @example
+   * const { acceptRoutes, exitNodeId } = network.getPrefs()
+   * console.log("exit node:", exitNodeId || "(none)")
    */
   getPrefs(): Prefs {
     return api().getPrefs()
@@ -232,6 +280,9 @@ export const network = {
   /**
    * Enable or disable acceptance of subnet routes advertised by peers.
    * Equivalent to `tailscale set --accept-routes`.
+   *
+   * @example
+   * await network.setAcceptRoutes(true)
    */
   async setAcceptRoutes(accept: boolean): Promise<void> {
     return api().setAcceptRoutes(accept)
@@ -240,6 +291,12 @@ export const network = {
   /**
    * Return all peers that advertise exit-node capability.
    * Synchronous — no await needed.
+   *
+   * @example
+   * const nodes = network.listExitNodes()
+   * for (const n of nodes) {
+   *   console.log(n.hostName, n.tailscaleIP, n.online ? "online" : "offline")
+   * }
    */
   listExitNodes(): ExitNode[] {
     return Array.from(api().listExitNodes() as ArrayLike<ExitNode>)
@@ -248,6 +305,15 @@ export const network = {
   /**
    * Activate an exit node by its stable node ID.
    * Pass an empty string (or omit) to clear the exit node.
+   *
+   * @example
+   * // Activate the first available online exit node
+   * const node = network.listExitNodes().find(n => n.online)
+   * if (node) await network.setExitNode(node.id)
+   *
+   * @example
+   * // Clear the active exit node
+   * await network.setExitNode()
    */
   async setExitNode(id: string = ""): Promise<void> {
     return api().setExitNode(id)
@@ -256,6 +322,12 @@ export const network = {
   /**
    * Return the full routing table (self + all peers).
    * Synchronous — no await needed.
+   *
+   * @example
+   * const routes = network.getRoutes()
+   * for (const r of routes) {
+   *   console.log(r.prefix, "via", r.via, r.isExitRoute ? "(exit)" : "")
+   * }
    */
   getRoutes(): Route[] {
     return Array.from(api().getRoutes() as ArrayLike<Route>)
@@ -264,6 +336,14 @@ export const network = {
   /**
    * Return the current Tailscale-managed DNS configuration.
    * Synchronous — no await needed.
+   *
+   * @example
+   * const dns = network.getDNS()
+   * console.log("resolvers:", dns.resolvers)
+   * console.log("MagicDNS:", dns.magicDNS)
+   * for (const [suffix, resolvers] of Object.entries(dns.routes)) {
+   *   console.log(`split-DNS: ${suffix} → ${resolvers.join(", ")}`)
+   * }
    */
   getDNS(): DNSInfo {
     return api().getDNS()
