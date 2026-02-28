@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"log"
 	"syscall/js"
@@ -12,7 +13,18 @@ import (
 	"github.com/adrianosela/tailscale-web/pkg/jsutil"
 	"github.com/adrianosela/tailscale-web/pkg/promise"
 	"github.com/adrianosela/tailscale-web/pkg/storage"
+	"github.com/breml/rootcerts/embedded"
 )
+
+func init() {
+	// In the WASM environment there is no OS certificate store, so the Go TLS
+	// stack has no root CAs and rejects every HTTPS connection. Register the
+	// Mozilla root CA bundle as the fallback pool so that certificate chains
+	// signed by any publicly-trusted CA verify correctly.
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM([]byte(embedded.MozillaCACertificatesPEM()))
+	x509.SetFallbackRoots(pool)
+}
 
 var tsNet *network.Network
 
@@ -23,6 +35,12 @@ func main() {
 	ns.Set("ping", js.FuncOf(pingFn))
 	ns.Set("dial", js.FuncOf(dialFn))
 	ns.Set("fetch", js.FuncOf(fetchFn))
+	ns.Set("getPrefs", js.FuncOf(getPrefsFn))
+	ns.Set("setAcceptRoutes", js.FuncOf(setAcceptRoutesFn))
+	ns.Set("listExitNodes", js.FuncOf(listExitNodesFn))
+	ns.Set("setExitNode", js.FuncOf(setExitNodeFn))
+	ns.Set("getRoutes", js.FuncOf(getRoutesFn))
+	ns.Set("getDNS", js.FuncOf(getDNSFn))
 	js.Global().Set("__tailscaleWeb", ns)
 
 	log.Println("tailscale-web: WASM ready")
@@ -107,6 +125,11 @@ func pingFn(this js.Value, args []js.Value) any {
 		obj := jsutil.NewObject()
 		obj.Set("alive", result.Alive)
 		obj.Set("rttMs", result.RttMs)
+		obj.Set("nodeName", result.NodeName)
+		obj.Set("nodeIP", result.NodeIP)
+		obj.Set("endpoint", result.Endpoint)
+		obj.Set("derpRegionCode", result.DERPRegionCode)
+		obj.Set("err", result.Err)
 		resolve(obj)
 	})
 }
@@ -179,6 +202,78 @@ func dialFn(this js.Value, args []js.Value) any {
 	})
 }
 
+// getPrefs() → { acceptRoutes: bool, exitNodeId: string }
+func getPrefsFn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return promise.Reject("not initialized — call init() first")
+	}
+	p := tsNet.GetPrefs()
+	obj := jsutil.NewObject()
+	obj.Set("acceptRoutes", p.AcceptRoutes)
+	obj.Set("exitNodeId", p.ExitNodeID)
+	return obj
+}
+
+// setAcceptRoutes(accept: bool) → Promise<void>
+func setAcceptRoutesFn(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return promise.Reject("setAcceptRoutes: boolean argument required")
+	}
+	accept := args[0].Bool()
+	return promise.New(func(resolve, reject func(any)) {
+		if tsNet == nil {
+			reject(fmt.Errorf("not initialized — call init() first"))
+			return
+		}
+		if err := tsNet.SetAcceptRoutes(accept); err != nil {
+			reject(err)
+			return
+		}
+		resolve(js.Undefined())
+	})
+}
+
+// listExitNodes() → [{ id, hostName, dnsName, tailscaleIP, active, online }]
+func listExitNodesFn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return js.Global().Get("Array").New()
+	}
+	nodes := tsNet.ListExitNodes()
+	arr := js.Global().Get("Array").New(len(nodes))
+	for i, n := range nodes {
+		obj := jsutil.NewObject()
+		obj.Set("id", n.ID)
+		obj.Set("hostName", n.HostName)
+		obj.Set("dnsName", n.DNSName)
+		obj.Set("tailscaleIP", n.TailscaleIP)
+		obj.Set("active", n.Active)
+		obj.Set("online", n.Online)
+		arr.SetIndex(i, obj)
+	}
+	return arr
+}
+
+// setExitNode(id: string) → Promise<void>
+//
+// Pass an empty string to clear the exit node.
+func setExitNodeFn(this js.Value, args []js.Value) any {
+	id := ""
+	if len(args) > 0 && args[0].Type() == js.TypeString {
+		id = args[0].String()
+	}
+	return promise.New(func(resolve, reject func(any)) {
+		if tsNet == nil {
+			reject(fmt.Errorf("not initialized — call init() first"))
+			return
+		}
+		if err := tsNet.SetExitNode(id); err != nil {
+			reject(err)
+			return
+		}
+		resolve(js.Undefined())
+	})
+}
+
 // fetch(url, init?) → Promise<{ status, statusText, ok, headers, body: Uint8Array }>
 //
 // init: { method?, headers?, body? }  — mirrors the browser Fetch API init object.
@@ -226,4 +321,66 @@ func fetchFn(this js.Value, args []js.Value) any {
 		resp.Set("body", jsutil.ToUint8Array(result.Body))
 		resolve(resp)
 	})
+}
+
+// getRoutes() → [{ prefix, via, isPrimary, isExitRoute }]
+func getRoutesFn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return js.Global().Get("Array").New()
+	}
+	routes := tsNet.GetRoutes()
+	arr := js.Global().Get("Array").New(len(routes))
+	for i, r := range routes {
+		obj := jsutil.NewObject()
+		obj.Set("prefix", r.Prefix)
+		obj.Set("via", r.Via)
+		obj.Set("isPrimary", r.IsPrimary)
+		obj.Set("isExitRoute", r.IsExitRoute)
+		arr.SetIndex(i, obj)
+	}
+	return arr
+}
+
+// getDNS() → { resolvers, routes, domains, extraRecords, magicDNS }
+func getDNSFn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return jsutil.NewObject()
+	}
+	d := tsNet.GetDNS()
+
+	resolvers := js.Global().Get("Array").New(len(d.Resolvers))
+	for i, r := range d.Resolvers {
+		resolvers.SetIndex(i, r)
+	}
+
+	domains := js.Global().Get("Array").New(len(d.Domains))
+	for i, dom := range d.Domains {
+		domains.SetIndex(i, dom)
+	}
+
+	routes := jsutil.NewObject()
+	for suffix, addrs := range d.Routes {
+		arr := js.Global().Get("Array").New(len(addrs))
+		for i, a := range addrs {
+			arr.SetIndex(i, a)
+		}
+		routes.Set(suffix, arr)
+	}
+
+	extraRecords := js.Global().Get("Array").New(len(d.ExtraRecords))
+	for i, rec := range d.ExtraRecords {
+		obj := jsutil.NewObject()
+		obj.Set("name", rec.Name)
+		obj.Set("type", rec.Type)
+		obj.Set("value", rec.Value)
+		extraRecords.SetIndex(i, obj)
+	}
+
+	obj := jsutil.NewObject()
+	obj.Set("resolvers", resolvers)
+	obj.Set("routes", routes)
+	obj.Set("domains", domains)
+	obj.Set("extraRecords", extraRecords)
+	obj.Set("magicDNS", d.MagicDNS)
+	return obj
 }

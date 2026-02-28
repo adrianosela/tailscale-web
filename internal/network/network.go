@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"tailscale.com/logtail"
 	"tailscale.com/net/netns"
 	"tailscale.com/net/tsdial"
+	"tailscale.com/tailcfg"
 	"tailscale.com/tsd"
 	"tailscale.com/types/logger"
 	"tailscale.com/wgengine"
@@ -62,10 +64,20 @@ type Network struct {
 	httpClient *http.Client
 }
 
-// PingResult is the result of a TCP connectivity probe.
+// PingResult is the result of an ICMP connectivity probe.
 type PingResult struct {
 	Alive bool
 	RttMs float64
+	// NodeName is the MagicDNS name of the destination peer.
+	NodeName string
+	// NodeIP is the Tailscale IP of the destination.
+	NodeIP string
+	// Endpoint is the direct UDP endpoint used, if a direct path was established.
+	Endpoint string
+	// DERPRegionCode is the DERP relay region (e.g. "nyc") if traffic was relayed.
+	DERPRegionCode string
+	// Err holds the error reason when Alive is false.
+	Err string
 }
 
 // FetchOptions mirrors the subset of the Fetch API init object we support.
@@ -81,6 +93,31 @@ type FetchResponse struct {
 	StatusText string
 	Headers    map[string]string
 	Body       []byte
+}
+
+// ExitNode represents a peer that is advertising exit-node capability.
+type ExitNode struct {
+	// ID is the stable node ID; pass to SetExitNode to activate it.
+	ID string
+	// HostName is the machine's hostname.
+	HostName string
+	// DNSName is the MagicDNS FQDN (ends with a dot).
+	DNSName string
+	// TailscaleIP is the primary Tailscale IPv4 address of the node.
+	TailscaleIP string
+	// Active reports whether this node is the currently selected exit node.
+	Active bool
+	// Online reports whether the node is currently reachable.
+	Online bool
+}
+
+// Prefs contains the subset of Tailscale preferences exposed by this library.
+type Prefs struct {
+	// AcceptRoutes reports whether subnet routes advertised by peers are accepted.
+	AcceptRoutes bool
+	// ExitNodeID is the stable node ID of the currently selected exit node,
+	// or empty if no exit node is active.
+	ExitNodeID string
 }
 
 // Connect starts a Tailscale node and returns a ready Network.
@@ -263,22 +300,71 @@ func (n *Network) Dial(ctx context.Context, network, addr string) (net.Conn, err
 	return n.dialer.UserDial(ctx, network, addr)
 }
 
-// Ping probes TCP connectivity to addr and measures round-trip time.
-// addr may be "host" (port 443 assumed) or "host:port".
+// Ping sends an ICMP echo request to addr and measures round-trip time.
+// addr may be a hostname or IP address; any port suffix is ignored.
+// Ping sends an ICMP echo request to addr and measures round-trip time.
+// addr may be a Tailscale IP address, a MagicDNS hostname (full or short), or
+// a machine hostname. Any port suffix is stripped and ignored.
 func (n *Network) Ping(ctx context.Context, addr string) (*PingResult, error) {
-	if !strings.Contains(addr, ":") {
-		addr += ":443"
+	// Strip port if present (ICMP doesn't use ports).
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
 	}
-	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	start := time.Now()
-	conn, err := n.dialer.UserDial(dialCtx, "tcp", addr)
+
+	// Try to parse as IP directly first.
+	ip, err := netip.ParseAddr(host)
 	if err != nil {
-		return &PingResult{Alive: false}, nil
+		// Not an IP — resolve by searching the Tailscale peer list.
+		// We avoid net.DefaultResolver because raw DNS sockets are unavailable
+		// in the browser WASM sandbox.
+		ip, err = n.resolvePeerAddr(host)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve %q: %w", host, err)
+		}
 	}
-	rtt := time.Since(start)
-	conn.Close()
-	return &PingResult{Alive: true, RttMs: float64(rtt.Microseconds()) / 1000.0}, nil
+
+	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	res, err := n.backend.Ping(pingCtx, ip, tailcfg.PingICMP, 0)
+	if err != nil {
+		return &PingResult{Alive: false, Err: err.Error()}, nil
+	}
+	if res.Err != "" {
+		return &PingResult{Alive: false, Err: res.Err}, nil
+	}
+	return &PingResult{
+		Alive:          true,
+		RttMs:          res.LatencySeconds * 1000,
+		NodeName:       res.NodeName,
+		NodeIP:         res.NodeIP,
+		Endpoint:       res.Endpoint,
+		DERPRegionCode: res.DERPRegionCode,
+	}, nil
+}
+
+// resolvePeerAddr resolves a hostname to a Tailscale IPv4 address by searching
+// the current peer list. It matches against:
+//   - the peer's machine hostname (HostName)
+//   - the full MagicDNS FQDN (DNSName, with or without trailing dot)
+//   - the first label of the MagicDNS name (short name, e.g. "myhost")
+func (n *Network) resolvePeerAddr(hostname string) (netip.Addr, error) {
+	hostname = strings.ToLower(strings.TrimSuffix(hostname, "."))
+	for _, peer := range n.backend.Status().Peer {
+		dnsName := strings.ToLower(strings.TrimSuffix(peer.DNSName, "."))
+		shortName := strings.SplitN(dnsName, ".", 2)[0]
+		if strings.ToLower(peer.HostName) == hostname ||
+			dnsName == hostname ||
+			shortName == hostname {
+			for _, ip := range peer.TailscaleIPs {
+				if ip.Is4() {
+					return ip, nil
+				}
+			}
+		}
+	}
+	return netip.Addr{}, fmt.Errorf("no peer found for %q", hostname)
 }
 
 // Fetch makes an HTTP request through the Tailscale network.
@@ -327,4 +413,190 @@ func (n *Network) Close() error {
 		n.backend.Shutdown()
 	}
 	return nil
+}
+
+// GetPrefs returns the current relevant preferences.
+func (n *Network) GetPrefs() Prefs {
+	p := n.backend.Prefs()
+	return Prefs{
+		AcceptRoutes: p.RouteAll(),
+		ExitNodeID:   string(p.ExitNodeID()),
+	}
+}
+
+// SetAcceptRoutes enables or disables acceptance of subnet routes advertised
+// by peers. This is equivalent to `tailscale set --accept-routes`.
+func (n *Network) SetAcceptRoutes(accept bool) error {
+	_, err := n.backend.EditPrefs(&ipn.MaskedPrefs{
+		Prefs:       ipn.Prefs{RouteAll: accept},
+		RouteAllSet: true,
+	})
+	return err
+}
+
+// ListExitNodes returns all peers that advertise exit-node capability.
+func (n *Network) ListExitNodes() []*ExitNode {
+	status := n.backend.Status()
+	var nodes []*ExitNode
+	for _, peer := range status.Peer {
+		if !peer.ExitNodeOption {
+			continue
+		}
+		node := &ExitNode{
+			ID:       string(peer.ID),
+			HostName: peer.HostName,
+			DNSName:  peer.DNSName,
+			Active:   peer.ExitNode,
+			Online:   peer.Online,
+		}
+		if len(peer.TailscaleIPs) > 0 {
+			node.TailscaleIP = peer.TailscaleIPs[0].String()
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+// Route represents a single entry in the routing table.
+type Route struct {
+	// Prefix is the CIDR being routed (e.g. "10.0.0.0/24" or "0.0.0.0/0").
+	Prefix string
+	// Via is the display name of the node advertising this route,
+	// or "self" for routes owned by this node.
+	Via string
+	// IsPrimary reports whether this node is the primary (active) router
+	// for the prefix. For self-routes this is always true.
+	IsPrimary bool
+	// IsExitRoute reports whether this is a default/exit route (0.0.0.0/0 or ::/0).
+	IsExitRoute bool
+}
+
+// DNSInfo holds the Tailscale-managed DNS configuration.
+type DNSInfo struct {
+	// Resolvers are the global nameservers.
+	Resolvers []string
+	// Routes maps DNS search suffixes to their dedicated resolvers.
+	// A nil/empty resolver list means "use the built-in MagicDNS resolver".
+	Routes map[string][]string
+	// Domains are the search/split-DNS domains.
+	Domains []string
+	// ExtraRecords are custom DNS records pushed by the control plane.
+	ExtraRecords []DNSRecord
+	// MagicDNS reports whether MagicDNS (proxied resolution) is enabled.
+	MagicDNS bool
+}
+
+// DNSRecord is a single custom DNS record.
+type DNSRecord struct {
+	Name  string
+	Type  string
+	Value string
+}
+
+// GetRoutes returns the full routing table derived from the current network map.
+func (n *Network) GetRoutes() []*Route {
+	nm := n.backend.NetMap()
+	if nm == nil {
+		return nil
+	}
+
+	isExit := func(p string) bool { return p == "0.0.0.0/0" || p == "::/0" }
+
+	var routes []*Route
+
+	// Self-advertised routes.
+	if nm.SelfNode.Valid() {
+		for _, p := range nm.SelfNode.AllowedIPs().All() {
+			routes = append(routes, &Route{
+				Prefix:      p.String(),
+				Via:         "self",
+				IsPrimary:   true,
+				IsExitRoute: isExit(p.String()),
+			})
+		}
+	}
+
+	// Peer routes.
+	for _, peer := range nm.Peers {
+		name := peer.Name()
+		if name == "" {
+			name = peer.Hostinfo().Hostname()
+		}
+		primary := make(map[string]bool)
+		for _, p := range peer.PrimaryRoutes().All() {
+			primary[p.String()] = true
+		}
+		for _, p := range peer.AllowedIPs().All() {
+			ps := p.String()
+			routes = append(routes, &Route{
+				Prefix:      ps,
+				Via:         name,
+				IsPrimary:   primary[ps],
+				IsExitRoute: isExit(ps),
+			})
+		}
+	}
+
+	sort.Slice(routes, func(i, j int) bool {
+		return routes[i].Prefix < routes[j].Prefix
+	})
+	return routes
+}
+
+// GetDNS returns the Tailscale-managed DNS configuration.
+func (n *Network) GetDNS() DNSInfo {
+	nm := n.backend.NetMap()
+	if nm == nil {
+		return DNSInfo{}
+	}
+	cfg := nm.DNS
+
+	info := DNSInfo{
+		MagicDNS: cfg.Proxied,
+		Domains:  cfg.Domains,
+	}
+
+	for _, r := range cfg.Resolvers {
+		info.Resolvers = append(info.Resolvers, r.Addr)
+	}
+
+	if len(cfg.Routes) > 0 {
+		info.Routes = make(map[string][]string, len(cfg.Routes))
+		for suffix, resolvers := range cfg.Routes {
+			addrs := make([]string, 0, len(resolvers))
+			for _, r := range resolvers {
+				addrs = append(addrs, r.Addr)
+			}
+			info.Routes[suffix] = addrs
+		}
+	}
+
+	for _, rec := range cfg.ExtraRecords {
+		t := rec.Type
+		if t == "" {
+			t = "A"
+		}
+		info.ExtraRecords = append(info.ExtraRecords, DNSRecord{
+			Name:  rec.Name,
+			Type:  t,
+			Value: rec.Value,
+		})
+	}
+
+	return info
+}
+
+// SetExitNode activates the exit node with the given stable node ID.
+// Pass an empty string to clear the exit node.
+func (n *Network) SetExitNode(id string) error {
+	mp := &ipn.MaskedPrefs{
+		Prefs:         ipn.Prefs{ExitNodeID: tailcfg.StableNodeID(id)},
+		ExitNodeIDSet: true,
+	}
+	if id == "" {
+		// Also clear any IP-based exit node setting.
+		mp.ExitNodeIPSet = true
+	}
+	_, err := n.backend.EditPrefs(mp)
+	return err
 }
