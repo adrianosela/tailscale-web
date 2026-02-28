@@ -4,5 +4,5 @@
   "name": "tailscale-web",
   "tsconfig": "tsconfig.docs.json",
   "includeVersion": true,
-  "readme": "none"
+  "readme": "README.md"
 }
