@@ -4,13 +4,53 @@ Run a [Tailscale](https://tailscale.com) node directly in the browser via WebAss
 
 ## Install
 
+### npm
+
 ```bash
 npm install tailscale-web
 ```
 
-> **Requirements:** a bundler that supports `new URL(asset, import.meta.url)` for WASM loading (Vite, webpack 5, Rollup). The WASM file (~35 MB) is shipped as a separate asset alongside the JS.
+```ts
+import { network } from "tailscale-web"
+```
+
+### Browser (no bundler)
+
+```html
+<script type="module">
+  import { network } from "https://esm.sh/tailscale-web"
+</script>
+```
 
 ## Quick start
+
+### Browser
+
+```html
+<!DOCTYPE html>
+<html>
+<body>
+  <script type="module">
+    import { network } from "https://esm.sh/tailscale-web"
+
+    await network.init({
+      hostname: "my-app",
+      onAuthRequired(url) {
+        window.open(url, "_blank", "width=600,height=700")
+      },
+      onAuthComplete() {
+        console.log("connected!")
+      },
+    })
+
+    const resp = await network.fetch("http://my-server/api/data")
+    console.log(await resp.json())
+  </script>
+</body>
+</html>
+```
+
+### npm
 
 ```ts
 import { network } from "tailscale-web"
@@ -18,7 +58,6 @@ import { network } from "tailscale-web"
 await network.init({
   hostname: "my-app",
   onAuthRequired(url) {
-    // open the Tailscale OAuth URL so the user can log in
     window.open(url, "_blank", "width=600,height=700")
   },
   onAuthComplete() {
@@ -26,7 +65,6 @@ await network.init({
   },
 })
 
-// make an HTTP request through the tailnet
 const resp = await network.fetch("http://my-server/api/data")
 console.log(await resp.json())
 ```

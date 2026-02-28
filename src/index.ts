@@ -1,6 +1,17 @@
 import "./wasm/wasm_exec.js"
 import wasmUrl from "./wasm/main.wasm"
 
+// esm.sh/esbuild replaces every `globalThis.process` reference with a
+// module-scoped import variable, so direct assignments never reach globalThis.
+// Use a computed key so the bundler can't detect this as the process global,
+// ensuring globalThis.process is set for Go WASM (gvisor reads process.pid).
+;(() => {
+  const g = globalThis as any
+  const k = "pro" + "cess"
+  if (!g[k]) g[k] = { pid: 1 }
+  else if (g[k].pid == null) g[k].pid = 1
+})()
+
 let wasmReady = false
 
 async function ensureWasm(): Promise<void> {
@@ -46,7 +57,7 @@ export interface PingResult {
   nodeName: string
   /** Tailscale IP of the destination. */
   nodeIP: string
-  /** Direct UDP endpoint used (e.g. "1.2.3.4:56789"), if a direct path exists. */
+  /** Direct UDP endpoint used if a direct path exists (e.g. an IP:port string). */
   endpoint: string
   /** DERP relay region code (e.g. "nyc") if traffic was relayed; empty if direct. */
   derpRegionCode: string
@@ -95,7 +106,7 @@ export interface Response {
 }
 
 export interface Route {
-  /** CIDR prefix (e.g. "10.0.0.0/24" or "0.0.0.0/0"). */
+  /** CIDR prefix (e.g. a subnet or default route). */
   prefix: string
   /** Display name of the advertising node, or "self". */
   via: string

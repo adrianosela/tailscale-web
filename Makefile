@@ -8,14 +8,14 @@ help: ## Print this help menu
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build
-build: build-wasm build-js ## Build the WASM and JS library
+build: build-wasm build-js ## Build WASM + JS bundle
 
 .PHONY: build-wasm
 build-wasm: ## Compile Go to WASM (output: src/wasm/main.wasm)
 	GOOS=js GOARCH=wasm go build -ldflags='-s -w' -o src/wasm/main.wasm
 
 .PHONY: build-js
-build-js: ## Bundle the JS library with Vite (output: dist/)
+build-js: ## Bundle the standard JS library with Vite (output: dist/, WASM separate)
 	$(VITE) build
 
 .PHONY: example

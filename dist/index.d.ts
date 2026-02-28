@@ -126,7 +126,7 @@ export declare interface PingResult {
     nodeName: string;
     /** Tailscale IP of the destination. */
     nodeIP: string;
-    /** Direct UDP endpoint used (e.g. "1.2.3.4:56789"), if a direct path exists. */
+    /** Direct UDP endpoint used if a direct path exists (e.g. an IP:port string). */
     endpoint: string;
     /** DERP relay region code (e.g. "nyc") if traffic was relayed; empty if direct. */
     derpRegionCode: string;
@@ -161,7 +161,7 @@ declare interface Response_2 {
 export { Response_2 as Response }
 
 export declare interface Route {
-    /** CIDR prefix (e.g. "10.0.0.0/24" or "0.0.0.0/0"). */
+    /** CIDR prefix (e.g. a subnet or default route). */
     prefix: string;
     /** Display name of the advertising node, or "self". */
     via: string;

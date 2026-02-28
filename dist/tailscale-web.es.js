@@ -14,19 +14,19 @@
 `);
         return r != -1 && (console.log(c.substring(0, r)), c = c.substring(r + 1)), s.length;
       },
-      write(i, s, r, l, y, h) {
-        if (r !== 0 || l !== s.length || y !== null) {
-          h(n());
+      write(i, s, r, a, y, u) {
+        if (r !== 0 || a !== s.length || y !== null) {
+          u(n());
           return;
         }
         const w = this.writeSync(i, s);
-        h(null, w);
+        u(null, w);
       },
       chmod(i, s, r) {
         r(n());
       },
-      chown(i, s, r, l) {
-        l(n());
+      chown(i, s, r, a) {
+        a(n());
       },
       close(i, s) {
         s(n());
@@ -34,8 +34,8 @@
       fchmod(i, s, r) {
         r(n());
       },
-      fchown(i, s, r, l) {
-        l(n());
+      fchown(i, s, r, a) {
+        a(n());
       },
       fstat(i, s) {
         s(n());
@@ -46,8 +46,8 @@
       ftruncate(i, s, r) {
         r(n());
       },
-      lchown(i, s, r, l) {
-        l(n());
+      lchown(i, s, r, a) {
+        a(n());
       },
       link(i, s, r) {
         r(n());
@@ -58,11 +58,11 @@
       mkdir(i, s, r) {
         r(n());
       },
-      open(i, s, r, l) {
-        l(n());
+      open(i, s, r, a) {
+        a(n());
       },
-      read(i, s, r, l, y, h) {
-        h(n());
+      read(i, s, r, a, y, u) {
+        u(n());
       },
       readdir(i, s) {
         s(n());
@@ -88,8 +88,8 @@
       unlink(i, s) {
         s(n());
       },
-      utimes(i, s, r, l) {
-        l(n());
+      utimes(i, s, r, a) {
+        a(n());
       }
     };
   }
@@ -132,7 +132,7 @@
     throw new Error("globalThis.TextEncoder is not available, polyfill required");
   if (!globalThis.TextDecoder)
     throw new Error("globalThis.TextDecoder is not available, polyfill required");
-  const d = new TextEncoder("utf-8"), g = new TextDecoder("utf-8");
+  const h = new TextEncoder("utf-8"), g = new TextDecoder("utf-8");
   globalThis.Go = class {
     constructor() {
       this.argv = ["js"], this.env = {}, this.exit = (t) => {
@@ -166,33 +166,33 @@
           this.mem.setFloat64(t, 0, !0);
           return;
         }
-        let a = this._ids.get(e);
-        a === void 0 && (a = this._idPool.pop(), a === void 0 && (a = this._values.length), this._values[a] = e, this._goRefCounts[a] = 0, this._ids.set(e, a)), this._goRefCounts[a]++;
-        let u = 0;
+        let l = this._ids.get(e);
+        l === void 0 && (l = this._idPool.pop(), l === void 0 && (l = this._values.length), this._values[l] = e, this._goRefCounts[l] = 0, this._ids.set(e, l)), this._goRefCounts[l]++;
+        let m = 0;
         switch (typeof e) {
           case "object":
-            e !== null && (u = 1);
+            e !== null && (m = 1);
             break;
           case "string":
-            u = 2;
+            m = 2;
             break;
           case "symbol":
-            u = 3;
+            m = 3;
             break;
           case "function":
-            u = 4;
+            m = 4;
             break;
         }
-        this.mem.setUint32(t + 4, 2146959360 | u, !0), this.mem.setUint32(t, a, !0);
-      }, l = (t) => {
+        this.mem.setUint32(t + 4, 2146959360 | m, !0), this.mem.setUint32(t, l, !0);
+      }, a = (t) => {
         const e = i(t + 0), o = i(t + 8);
         return new Uint8Array(this._inst.exports.mem.buffer, e, o);
       }, y = (t) => {
-        const e = i(t + 0), o = i(t + 8), a = new Array(o);
-        for (let u = 0; u < o; u++)
-          a[u] = s(e + u * 8);
-        return a;
-      }, h = (t) => {
+        const e = i(t + 0), o = i(t + 8), l = new Array(o);
+        for (let m = 0; m < o; m++)
+          l[m] = s(e + m * 8);
+        return l;
+      }, u = (t) => {
         const e = i(t + 0), o = i(t + 8);
         return g.decode(new DataView(this._inst.exports.mem.buffer, e, o));
       }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), f = Date.now() - performance.now();
@@ -215,8 +215,8 @@
           // func wasmWrite(fd uintptr, p unsafe.Pointer, n int32)
           "runtime.wasmWrite": (t) => {
             t >>>= 0;
-            const e = i(t + 8), o = i(t + 16), a = this.mem.getInt32(t + 24, !0);
-            fs.writeSync(e, new Uint8Array(this._inst.exports.mem.buffer, o, a));
+            const e = i(t + 8), o = i(t + 16), l = this.mem.getInt32(t + 24, !0);
+            fs.writeSync(e, new Uint8Array(this._inst.exports.mem.buffer, o, l));
           },
           // func resetMemoryDataView()
           "runtime.resetMemoryDataView": (t) => {
@@ -252,7 +252,7 @@
           },
           // func getRandomData(r []byte)
           "runtime.getRandomData": (t) => {
-            t >>>= 0, crypto.getRandomValues(l(t + 8));
+            t >>>= 0, crypto.getRandomValues(a(t + 8));
           },
           // func finalizeRef(v ref)
           "syscall/js.finalizeRef": (t) => {
@@ -265,21 +265,21 @@
           },
           // func stringVal(value string) ref
           "syscall/js.stringVal": (t) => {
-            t >>>= 0, r(t + 24, h(t + 8));
+            t >>>= 0, r(t + 24, u(t + 8));
           },
           // func valueGet(v ref, p string) ref
           "syscall/js.valueGet": (t) => {
             t >>>= 0;
-            const e = Reflect.get(s(t + 8), h(t + 16));
+            const e = Reflect.get(s(t + 8), u(t + 16));
             t = this._inst.exports.getsp() >>> 0, r(t + 32, e);
           },
           // func valueSet(v ref, p string, x ref)
           "syscall/js.valueSet": (t) => {
-            t >>>= 0, Reflect.set(s(t + 8), h(t + 16), s(t + 32));
+            t >>>= 0, Reflect.set(s(t + 8), u(t + 16), s(t + 32));
           },
           // func valueDelete(v ref, p string)
           "syscall/js.valueDelete": (t) => {
-            t >>>= 0, Reflect.deleteProperty(s(t + 8), h(t + 16));
+            t >>>= 0, Reflect.deleteProperty(s(t + 8), u(t + 16));
           },
           // func valueIndex(v ref, i int) ref
           "syscall/js.valueIndex": (t) => {
@@ -293,8 +293,8 @@
           "syscall/js.valueCall": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = Reflect.get(e, h(t + 16)), a = y(t + 32), u = Reflect.apply(o, e, a);
-              t = this._inst.exports.getsp() >>> 0, r(t + 56, u), this.mem.setUint8(t + 64, 1);
+              const e = s(t + 8), o = Reflect.get(e, u(t + 16)), l = y(t + 32), m = Reflect.apply(o, e, l);
+              t = this._inst.exports.getsp() >>> 0, r(t + 56, m), this.mem.setUint8(t + 64, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 56, e), this.mem.setUint8(t + 64, 0);
             }
@@ -303,8 +303,8 @@
           "syscall/js.valueInvoke": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = y(t + 16), a = Reflect.apply(e, void 0, o);
-              t = this._inst.exports.getsp() >>> 0, r(t + 40, a), this.mem.setUint8(t + 48, 1);
+              const e = s(t + 8), o = y(t + 16), l = Reflect.apply(e, void 0, o);
+              t = this._inst.exports.getsp() >>> 0, r(t + 40, l), this.mem.setUint8(t + 48, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 40, e), this.mem.setUint8(t + 48, 0);
             }
@@ -313,8 +313,8 @@
           "syscall/js.valueNew": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = y(t + 16), a = Reflect.construct(e, o);
-              t = this._inst.exports.getsp() >>> 0, r(t + 40, a), this.mem.setUint8(t + 48, 1);
+              const e = s(t + 8), o = y(t + 16), l = Reflect.construct(e, o);
+              t = this._inst.exports.getsp() >>> 0, r(t + 40, l), this.mem.setUint8(t + 48, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 40, e), this.mem.setUint8(t + 48, 0);
             }
@@ -326,14 +326,14 @@
           // valuePrepareString(v ref) (ref, int)
           "syscall/js.valuePrepareString": (t) => {
             t >>>= 0;
-            const e = d.encode(String(s(t + 8)));
+            const e = h.encode(String(s(t + 8)));
             r(t + 16, e), c(t + 24, e.length);
           },
           // valueLoadString(v ref, b []byte)
           "syscall/js.valueLoadString": (t) => {
             t >>>= 0;
             const e = s(t + 8);
-            l(t + 16).set(e);
+            a(t + 16).set(e);
           },
           // func valueInstanceOf(v ref, t ref) bool
           "syscall/js.valueInstanceOf": (t) => {
@@ -342,24 +342,24 @@
           // func copyBytesToGo(dst []byte, src ref) (int, bool)
           "syscall/js.copyBytesToGo": (t) => {
             t >>>= 0;
-            const e = l(t + 8), o = s(t + 32);
+            const e = a(t + 8), o = s(t + 32);
             if (!(o instanceof Uint8Array || o instanceof Uint8ClampedArray)) {
               this.mem.setUint8(t + 48, 0);
               return;
             }
-            const a = o.subarray(0, e.length);
-            e.set(a), c(t + 40, a.length), this.mem.setUint8(t + 48, 1);
+            const l = o.subarray(0, e.length);
+            e.set(l), c(t + 40, l.length), this.mem.setUint8(t + 48, 1);
           },
           // func copyBytesToJS(dst ref, src []byte) (int, bool)
           "syscall/js.copyBytesToJS": (t) => {
             t >>>= 0;
-            const e = s(t + 8), o = l(t + 16);
+            const e = s(t + 8), o = a(t + 16);
             if (!(e instanceof Uint8Array || e instanceof Uint8ClampedArray)) {
               this.mem.setUint8(t + 48, 0);
               return;
             }
-            const a = o.subarray(0, e.length);
-            e.set(a), c(t + 40, a.length), this.mem.setUint8(t + 48, 1);
+            const l = o.subarray(0, e.length);
+            e.set(l), c(t + 40, l.length), this.mem.setUint8(t + 48, 1);
           },
           debug: (t) => {
             console.log(t);
@@ -390,20 +390,20 @@
       ]), this._idPool = [], this.exited = !1;
       let i = 4096;
       const s = (f) => {
-        const t = i, e = d.encode(f + "\0");
+        const t = i, e = h.encode(f + "\0");
         return new Uint8Array(this.mem.buffer, i, e.length).set(e), i += e.length, i % 8 !== 0 && (i += 8 - i % 8), t;
-      }, r = this.argv.length, l = [];
+      }, r = this.argv.length, a = [];
       this.argv.forEach((f) => {
-        l.push(s(f));
-      }), l.push(0), Object.keys(this.env).sort().forEach((f) => {
-        l.push(s(`${f}=${this.env[f]}`));
-      }), l.push(0);
-      const h = i;
-      if (l.forEach((f) => {
+        a.push(s(f));
+      }), a.push(0), Object.keys(this.env).sort().forEach((f) => {
+        a.push(s(`${f}=${this.env[f]}`));
+      }), a.push(0);
+      const u = i;
+      if (a.forEach((f) => {
         this.mem.setUint32(i, f, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
       }), i >= 12288)
         throw new Error("total length of command line and environment variables exceeds limit");
-      this._inst.exports.run(r, h), this.exited && this._resolveExitPromise(), await this._exitPromise;
+      this._inst.exports.run(r, u), this.exited && this._resolveExitPromise(), await this._exitPromise;
     }
     _resume() {
       if (this.exited)
@@ -419,17 +419,21 @@
     }
   };
 })();
-const x = new URL("main.wasm", import.meta.url).href;
+const b = new URL("main.wasm", import.meta.url).href;
+(() => {
+  const n = globalThis, h = "process";
+  n[h] ? n[h].pid == null && (n[h].pid = 1) : n[h] = { pid: 1 };
+})();
 let _ = !1;
-async function b() {
+async function x() {
   if (_) return;
-  const n = new globalThis.Go(), d = await WebAssembly.instantiateStreaming(
-    fetch(x),
+  const n = new globalThis.Go(), h = await WebAssembly.instantiateStreaming(
+    fetch(b),
     n.importObject
   );
-  n.run(d.instance), _ = !0;
+  n.run(h.instance), _ = !0;
 }
-function m() {
+function d() {
   return globalThis.__tailscaleWeb;
 }
 function T(n) {
@@ -457,7 +461,7 @@ const p = {
    * })
    */
   setStorage(n) {
-    m().setStorage(n);
+    d().setStorage(n);
   },
   /**
    * Initialize and connect the Tailscale node. Must be called before any
@@ -467,30 +471,30 @@ const p = {
    * automatically. Otherwise the OAuth flow is triggered via onAuthRequired.
    */
   async init(n = {}) {
-    return await b(), m().init(n);
+    return await x(), d().init(n);
   },
   /**
    * Probe TCP connectivity to addr and measure round-trip time.
    * addr may be "host" (port 443 assumed) or "host:port".
    */
   async ping(n) {
-    return m().ping(n);
+    return d().ping(n);
   },
   /**
    * Open a raw TCP connection through the Tailscale network.
    * Returns a Connection object for sending and receiving data.
    */
   async dial(n) {
-    const d = await m().dial(n);
+    const h = await d().dial(n);
     return {
       onData(g) {
-        d.onData(g);
+        h.onData(g);
       },
       write(g) {
-        d.write(typeof g == "string" ? new TextEncoder().encode(g) : g);
+        h.write(typeof g == "string" ? new TextEncoder().encode(g) : g);
       },
       close() {
-        d.close();
+        h.close();
       }
     };
   },
@@ -498,50 +502,50 @@ const p = {
    * Make an HTTP request through the Tailscale network.
    * Mirrors the browser Fetch API signature.
    */
-  async fetch(n, d = {}) {
-    return T(await m().fetch(n, d));
+  async fetch(n, h = {}) {
+    return T(await d().fetch(n, h));
   },
   /**
    * Return the current preferences (acceptRoutes, exitNodeId).
    * Synchronous — no await needed.
    */
   getPrefs() {
-    return m().getPrefs();
+    return d().getPrefs();
   },
   /**
    * Enable or disable acceptance of subnet routes advertised by peers.
    * Equivalent to `tailscale set --accept-routes`.
    */
   async setAcceptRoutes(n) {
-    return m().setAcceptRoutes(n);
+    return d().setAcceptRoutes(n);
   },
   /**
    * Return all peers that advertise exit-node capability.
    * Synchronous — no await needed.
    */
   listExitNodes() {
-    return Array.from(m().listExitNodes());
+    return Array.from(d().listExitNodes());
   },
   /**
    * Activate an exit node by its stable node ID.
    * Pass an empty string (or omit) to clear the exit node.
    */
   async setExitNode(n = "") {
-    return m().setExitNode(n);
+    return d().setExitNode(n);
   },
   /**
    * Return the full routing table (self + all peers).
    * Synchronous — no await needed.
    */
   getRoutes() {
-    return Array.from(m().getRoutes());
+    return Array.from(d().getRoutes());
   },
   /**
    * Return the current Tailscale-managed DNS configuration.
    * Synchronous — no await needed.
    */
   getDNS() {
-    return m().getDNS();
+    return d().getDNS();
   }
 };
 export {
