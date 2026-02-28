@@ -1,6 +1,11 @@
 # tailscale-web
 
-Run a [Tailscale](https://tailscale.com) node directly in the browser via WebAssembly. Make HTTP requests, open TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
+[![npm version](https://img.shields.io/npm/v/tailscale-web.svg?style=flat-square)](https://www.npmjs.org/package/tailscale-web)
+[![GitHub issues](https://img.shields.io/github/issues/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/issues)
+[![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/master/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/adrianosela/tailscale-web)](https://goreportcard.com/report/github.com/adrianosela/tailscale-web)
+
+Run a [Tailscale](https://tailscale.com) node directly in the browser. Make HTTP requests, open TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
 
 ## Install
 

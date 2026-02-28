@@ -1,4 +1,5 @@
 import { network, type Connection, type PingResult } from "tailscale-web"
+import src from "./main.ts?raw"
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ function flashButton(btn: HTMLButtonElement, msg: string, original: string, ms =
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 const tabRenderers: Record<string, (() => void) | undefined> = {}
+let activeTab = "ping"
 
 document.querySelectorAll<HTMLButtonElement>(".nav-tab").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -44,6 +46,7 @@ document.querySelectorAll<HTMLButtonElement>(".nav-tab").forEach(btn => {
     document.querySelectorAll<HTMLElement>(".tab-panel").forEach(p => { p.hidden = true })
     btn.classList.add("active")
     const tab = btn.dataset.tab!
+    activeTab = tab
     el(`tab-${tab}`).hidden = false
     tabRenderers[tab]?.()
     delete tabRenderers[tab]  // run once on first open; Refresh button handles subsequent
@@ -76,6 +79,7 @@ async function boot() {
       },
     })
     showApp()
+    await autoRestoreExitNode()
   } catch (err) {
     showError("error-login", String(err))
   }
@@ -95,9 +99,34 @@ el("btn-theme").addEventListener("click", () => {
   applyTheme(next)
 })
 
+const LS_EXIT_NODE = "ts-exit-node-id"
+
+async function autoRestoreExitNode() {
+  const stored = localStorage.getItem(LS_EXIT_NODE)
+  if (!stored) return
+  const node = network.listExitNodes().find(n => n.id === stored)
+  if (!node) return
+  try {
+    await network.setExitNode(stored)
+    populateExitNodeSelect()
+    updateExitNodeIndicator()
+  } catch { /* ignore */ }
+}
+
+function updateExitNodeIndicator() {
+  const { exitNodeId } = network.getPrefs()
+  let name = "<none>"
+  if (exitNodeId) {
+    const node = network.listExitNodes().find(n => n.id === exitNodeId)
+    name = node ? (node.hostName || node.dnsName) : exitNodeId
+  }
+  el("exit-node-name").textContent = name
+}
+
 function showApp() {
   hide("screen-login")
   show("screen-app")
+  updateExitNodeIndicator()
   tabRenderers["routes"] = renderRoutes
   tabRenderers["dns"]    = renderDNS
 }
@@ -397,7 +426,10 @@ el("btn-exit-node-set").addEventListener("click", async () => {
   btn.textContent = "Saving…"
   try {
     await network.setExitNode(select.value)
+    if (select.value) localStorage.setItem(LS_EXIT_NODE, select.value)
+    else localStorage.removeItem(LS_EXIT_NODE)
     populateExitNodeSelect()
+    updateExitNodeIndicator()
     btn.disabled = false
     flashButton(btn, "Saved!", "Set")
   } catch (err) {
@@ -415,7 +447,9 @@ el("btn-exit-node-clear").addEventListener("click", async () => {
   btn.textContent = "Clearing…"
   try {
     await network.setExitNode("")
+    localStorage.removeItem(LS_EXIT_NODE)
     populateExitNodeSelect()
+    updateExitNodeIndicator()
     btn.disabled = false
     flashButton(btn, "Cleared!", "Clear")
   } catch (err) {
@@ -629,6 +663,55 @@ function renderDNS() {
 el("btn-dns-refresh").addEventListener("click", () => {
   renderDNS()
   flashButton(el<HTMLButtonElement>("btn-dns-refresh"), "Updated!", "Refresh")
+})
+
+// ── Code viewer ───────────────────────────────────────────────────────────────
+
+const codeSections: Record<string, [string, string]> = {
+  ping:   ["// ── Ping ──",                "// ── Fetch ──"],
+  fetch:  ["// ── Fetch ──",               "// ── Dial ──"],
+  dial:   ["// ── Dial ──",                "// ── Exit node selector ──"],
+  routes: ["// ── Exit node selector ──",  "// ── DNS ──"],
+  dns:    ["// ── DNS ──",                 "// ── Code viewer ──"],
+}
+
+function getCodeSection(tab: string): string {
+  const [start, end] = codeSections[tab] ?? []
+  if (!start) return ""
+  const lines = src.split("\n")
+  const si = lines.findIndex(l => l.includes(start))
+  const ei = lines.findIndex((l, i) => i > si && l.includes(end))
+  return lines.slice(si, ei < 0 ? undefined : ei).join("\n").trim()
+}
+
+function openCodeModal() {
+  el("code-modal-tab").textContent = activeTab
+  el("code-modal-pre").textContent = getCodeSection(activeTab)
+  el("code-modal").hidden = false
+}
+
+function closeCodeModal() {
+  el("code-modal").hidden = true
+}
+
+el("btn-view-code").addEventListener("click", openCodeModal)
+el("btn-close-code").addEventListener("click", closeCodeModal)
+el("code-modal").addEventListener("click", (e) => {
+  if (e.target === el("code-modal")) closeCodeModal()
+})
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el("code-modal").hidden) closeCodeModal()
+})
+
+el("btn-copy-code").addEventListener("click", () => {
+  const btn = el<HTMLButtonElement>("btn-copy-code")
+  navigator.clipboard.writeText(el("code-modal-pre").textContent ?? "")
+    .then(() => {
+      const orig = btn.textContent!
+      btn.textContent = "Copied!"
+      setTimeout(() => { btn.textContent = orig }, 1400)
+    })
+    .catch(() => {})
 })
 
 // ── Go ────────────────────────────────────────────────────────────────────────
