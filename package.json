@@ -1,0 +1,26 @@
+{
+  "name": "tailscale-web",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:wasm": "GOOS=js GOARCH=wasm go build -ldflags='-s -w' -o src/wasm/main.wasm",
+    "build": "npm run build:wasm && vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adrianosela/tailscale-web.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/adrianosela/tailscale-web/issues"
+  },
+  "homepage": "https://github.com/adrianosela/tailscale-web#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}
