@@ -407,6 +407,7 @@
           <button class="nav-tab active" data-tab="ping">Ping</button>
           <button class="nav-tab"        data-tab="fetch">Fetch</button>
           <button class="nav-tab"        data-tab="dial">Dial</button>
+          <button class="nav-tab"        data-tab="listen">Listen</button>
           <button class="nav-tab"        data-tab="routes">Routes</button>
           <button class="nav-tab"        data-tab="dns">DNS</button>
           <button id="btn-view-code" class="btn-code" title="View source for this tab">
@@ -524,6 +525,31 @@
               <button id="btn-dial-send" class="btn btn-primary">Send</button>
             </div>
             <div id="dial-output" class="output"></div>
+          </div>
+        </div>
+
+        <!-- Listen -->
+        <div id="tab-listen" class="tab-panel" hidden>
+          <div class="card" id="listen-form">
+            <div id="listen-error" class="error-banner" hidden></div>
+            <div class="field-row">
+              <div class="field">
+                <label>Port <span style="font-weight:400;color:var(--text-muted)">(0 = random)</span></label>
+                <input id="listen-port" type="number" placeholder="0" value="0" min="0" max="65535" />
+              </div>
+              <div class="field" style="flex:0;display:flex;align-items:flex-end;">
+                <button id="btn-listen-start" class="btn btn-primary">Listen</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="listen-session" hidden>
+            <div class="conn-bar">
+              <div class="conn-bar-dot"></div>
+              <span>Listening on port <strong id="listen-assigned-port"></strong></span>
+              <button id="btn-listen-stop" class="btn btn-danger" style="margin-left:auto;padding:.2rem .6rem;font-size:.75rem;">Stop</button>
+            </div>
+            <div id="listen-output" class="output" style="min-height:120px;max-height:480px;overflow-y:auto;"></div>
           </div>
         </div>
 

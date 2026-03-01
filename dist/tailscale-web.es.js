@@ -1,21 +1,21 @@
 (() => {
   const n = () => {
-    const c = new Error("not implemented");
-    return c.code = "ENOSYS", c;
+    const l = new Error("not implemented");
+    return l.code = "ENOSYS", l;
   };
   if (!globalThis.fs) {
-    let c = "";
+    let l = "";
     globalThis.fs = {
       constants: { O_WRONLY: -1, O_RDWR: -1, O_CREAT: -1, O_TRUNC: -1, O_APPEND: -1, O_EXCL: -1, O_DIRECTORY: -1 },
       // unused
       writeSync(i, s) {
-        c += g.decode(s);
-        const r = c.lastIndexOf(`
+        l += d.decode(s);
+        const r = l.lastIndexOf(`
 `);
-        return r != -1 && (console.log(c.substring(0, r)), c = c.substring(r + 1)), s.length;
+        return r != -1 && (console.log(l.substring(0, r)), l = l.substring(r + 1)), s.length;
       },
-      write(i, s, r, a, y, u) {
-        if (r !== 0 || a !== s.length || y !== null) {
+      write(i, s, r, c, y, u) {
+        if (r !== 0 || c !== s.length || y !== null) {
           u(n());
           return;
         }
@@ -25,8 +25,8 @@
       chmod(i, s, r) {
         r(n());
       },
-      chown(i, s, r, a) {
-        a(n());
+      chown(i, s, r, c) {
+        c(n());
       },
       close(i, s) {
         s(n());
@@ -34,8 +34,8 @@
       fchmod(i, s, r) {
         r(n());
       },
-      fchown(i, s, r, a) {
-        a(n());
+      fchown(i, s, r, c) {
+        c(n());
       },
       fstat(i, s) {
         s(n());
@@ -46,8 +46,8 @@
       ftruncate(i, s, r) {
         r(n());
       },
-      lchown(i, s, r, a) {
-        a(n());
+      lchown(i, s, r, c) {
+        c(n());
       },
       link(i, s, r) {
         r(n());
@@ -58,10 +58,10 @@
       mkdir(i, s, r) {
         r(n());
       },
-      open(i, s, r, a) {
-        a(n());
+      open(i, s, r, c) {
+        c(n());
       },
-      read(i, s, r, a, y, u) {
+      read(i, s, r, c, y, u) {
         u(n());
       },
       readdir(i, s) {
@@ -88,8 +88,8 @@
       unlink(i, s) {
         s(n());
       },
-      utimes(i, s, r, a) {
-        a(n());
+      utimes(i, s, r, c) {
+        c(n());
       }
     };
   }
@@ -121,8 +121,8 @@
       throw n();
     }
   }), globalThis.path || (globalThis.path = {
-    resolve(...c) {
-      return c.join("/");
+    resolve(...l) {
+      return l.join("/");
     }
   }), !globalThis.crypto)
     throw new Error("globalThis.crypto is not available, polyfill required (crypto.getRandomValues only)");
@@ -132,7 +132,7 @@
     throw new Error("globalThis.TextEncoder is not available, polyfill required");
   if (!globalThis.TextDecoder)
     throw new Error("globalThis.TextDecoder is not available, polyfill required");
-  const h = new TextEncoder("utf-8"), g = new TextDecoder("utf-8");
+  const h = new TextEncoder("utf-8"), d = new TextDecoder("utf-8");
   globalThis.Go = class {
     constructor() {
       this.argv = ["js"], this.env = {}, this.exit = (t) => {
@@ -140,7 +140,7 @@
       }, this._exitPromise = new Promise((t) => {
         this._resolveExitPromise = t;
       }), this._pendingEvent = null, this._scheduledTimeouts = /* @__PURE__ */ new Map(), this._nextCallbackTimeoutID = 1;
-      const c = (t, e) => {
+      const l = (t, e) => {
         this.mem.setUint32(t + 0, e, !0), this.mem.setUint32(t + 4, Math.floor(e / 4294967296), !0);
       }, i = (t) => {
         const e = this.mem.getUint32(t + 0, !0), o = this.mem.getInt32(t + 4, !0);
@@ -166,8 +166,8 @@
           this.mem.setFloat64(t, 0, !0);
           return;
         }
-        let l = this._ids.get(e);
-        l === void 0 && (l = this._idPool.pop(), l === void 0 && (l = this._values.length), this._values[l] = e, this._goRefCounts[l] = 0, this._ids.set(e, l)), this._goRefCounts[l]++;
+        let a = this._ids.get(e);
+        a === void 0 && (a = this._idPool.pop(), a === void 0 && (a = this._values.length), this._values[a] = e, this._goRefCounts[a] = 0, this._ids.set(e, a)), this._goRefCounts[a]++;
         let m = 0;
         switch (typeof e) {
           case "object":
@@ -183,19 +183,19 @@
             m = 4;
             break;
         }
-        this.mem.setUint32(t + 4, 2146959360 | m, !0), this.mem.setUint32(t, l, !0);
-      }, a = (t) => {
+        this.mem.setUint32(t + 4, 2146959360 | m, !0), this.mem.setUint32(t, a, !0);
+      }, c = (t) => {
         const e = i(t + 0), o = i(t + 8);
         return new Uint8Array(this._inst.exports.mem.buffer, e, o);
       }, y = (t) => {
-        const e = i(t + 0), o = i(t + 8), l = new Array(o);
+        const e = i(t + 0), o = i(t + 8), a = new Array(o);
         for (let m = 0; m < o; m++)
-          l[m] = s(e + m * 8);
-        return l;
+          a[m] = s(e + m * 8);
+        return a;
       }, u = (t) => {
         const e = i(t + 0), o = i(t + 8);
-        return g.decode(new DataView(this._inst.exports.mem.buffer, e, o));
-      }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), d = Date.now() - performance.now();
+        return d.decode(new DataView(this._inst.exports.mem.buffer, e, o));
+      }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), g = Date.now() - performance.now();
       this.importObject = {
         _gotest: {
           add: (t, e) => t + e,
@@ -215,8 +215,8 @@
           // func wasmWrite(fd uintptr, p unsafe.Pointer, n int32)
           "runtime.wasmWrite": (t) => {
             t >>>= 0;
-            const e = i(t + 8), o = i(t + 16), l = this.mem.getInt32(t + 24, !0);
-            fs.writeSync(e, new Uint8Array(this._inst.exports.mem.buffer, o, l));
+            const e = i(t + 8), o = i(t + 16), a = this.mem.getInt32(t + 24, !0);
+            fs.writeSync(e, new Uint8Array(this._inst.exports.mem.buffer, o, a));
           },
           // func resetMemoryDataView()
           "runtime.resetMemoryDataView": (t) => {
@@ -224,13 +224,13 @@
           },
           // func nanotime1() int64
           "runtime.nanotime1": (t) => {
-            t >>>= 0, c(t + 8, (d + performance.now()) * 1e6);
+            t >>>= 0, l(t + 8, (g + performance.now()) * 1e6);
           },
           // func walltime() (sec int64, nsec int32)
           "runtime.walltime": (t) => {
             t >>>= 0;
             const e = (/* @__PURE__ */ new Date()).getTime();
-            c(t + 8, e / 1e3), this.mem.setInt32(t + 16, e % 1e3 * 1e6, !0);
+            l(t + 8, e / 1e3), this.mem.setInt32(t + 16, e % 1e3 * 1e6, !0);
           },
           // func scheduleTimeoutEvent(delay int64) int32
           "runtime.scheduleTimeoutEvent": (t) => {
@@ -252,7 +252,7 @@
           },
           // func getRandomData(r []byte)
           "runtime.getRandomData": (t) => {
-            t >>>= 0, crypto.getRandomValues(a(t + 8));
+            t >>>= 0, crypto.getRandomValues(c(t + 8));
           },
           // func finalizeRef(v ref)
           "syscall/js.finalizeRef": (t) => {
@@ -293,7 +293,7 @@
           "syscall/js.valueCall": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = Reflect.get(e, u(t + 16)), l = y(t + 32), m = Reflect.apply(o, e, l);
+              const e = s(t + 8), o = Reflect.get(e, u(t + 16)), a = y(t + 32), m = Reflect.apply(o, e, a);
               t = this._inst.exports.getsp() >>> 0, r(t + 56, m), this.mem.setUint8(t + 64, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 56, e), this.mem.setUint8(t + 64, 0);
@@ -303,8 +303,8 @@
           "syscall/js.valueInvoke": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = y(t + 16), l = Reflect.apply(e, void 0, o);
-              t = this._inst.exports.getsp() >>> 0, r(t + 40, l), this.mem.setUint8(t + 48, 1);
+              const e = s(t + 8), o = y(t + 16), a = Reflect.apply(e, void 0, o);
+              t = this._inst.exports.getsp() >>> 0, r(t + 40, a), this.mem.setUint8(t + 48, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 40, e), this.mem.setUint8(t + 48, 0);
             }
@@ -313,27 +313,27 @@
           "syscall/js.valueNew": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = y(t + 16), l = Reflect.construct(e, o);
-              t = this._inst.exports.getsp() >>> 0, r(t + 40, l), this.mem.setUint8(t + 48, 1);
+              const e = s(t + 8), o = y(t + 16), a = Reflect.construct(e, o);
+              t = this._inst.exports.getsp() >>> 0, r(t + 40, a), this.mem.setUint8(t + 48, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 40, e), this.mem.setUint8(t + 48, 0);
             }
           },
           // func valueLength(v ref) int
           "syscall/js.valueLength": (t) => {
-            t >>>= 0, c(t + 16, parseInt(s(t + 8).length));
+            t >>>= 0, l(t + 16, parseInt(s(t + 8).length));
           },
           // valuePrepareString(v ref) (ref, int)
           "syscall/js.valuePrepareString": (t) => {
             t >>>= 0;
             const e = h.encode(String(s(t + 8)));
-            r(t + 16, e), c(t + 24, e.length);
+            r(t + 16, e), l(t + 24, e.length);
           },
           // valueLoadString(v ref, b []byte)
           "syscall/js.valueLoadString": (t) => {
             t >>>= 0;
             const e = s(t + 8);
-            a(t + 16).set(e);
+            c(t + 16).set(e);
           },
           // func valueInstanceOf(v ref, t ref) bool
           "syscall/js.valueInstanceOf": (t) => {
@@ -342,24 +342,24 @@
           // func copyBytesToGo(dst []byte, src ref) (int, bool)
           "syscall/js.copyBytesToGo": (t) => {
             t >>>= 0;
-            const e = a(t + 8), o = s(t + 32);
+            const e = c(t + 8), o = s(t + 32);
             if (!(o instanceof Uint8Array || o instanceof Uint8ClampedArray)) {
               this.mem.setUint8(t + 48, 0);
               return;
             }
-            const l = o.subarray(0, e.length);
-            e.set(l), c(t + 40, l.length), this.mem.setUint8(t + 48, 1);
+            const a = o.subarray(0, e.length);
+            e.set(a), l(t + 40, a.length), this.mem.setUint8(t + 48, 1);
           },
           // func copyBytesToJS(dst ref, src []byte) (int, bool)
           "syscall/js.copyBytesToJS": (t) => {
             t >>>= 0;
-            const e = s(t + 8), o = a(t + 16);
+            const e = s(t + 8), o = c(t + 16);
             if (!(e instanceof Uint8Array || e instanceof Uint8ClampedArray)) {
               this.mem.setUint8(t + 48, 0);
               return;
             }
-            const l = o.subarray(0, e.length);
-            e.set(l), c(t + 40, l.length), this.mem.setUint8(t + 48, 1);
+            const a = o.subarray(0, e.length);
+            e.set(a), l(t + 40, a.length), this.mem.setUint8(t + 48, 1);
           },
           debug: (t) => {
             console.log(t);
@@ -367,10 +367,10 @@
         }
       };
     }
-    async run(c) {
-      if (!(c instanceof WebAssembly.Instance))
+    async run(l) {
+      if (!(l instanceof WebAssembly.Instance))
         throw new Error("Go.run: WebAssembly.Instance expected");
-      this._inst = c, this.mem = new DataView(this._inst.exports.mem.buffer), this._values = [
+      this._inst = l, this.mem = new DataView(this._inst.exports.mem.buffer), this._values = [
         // JS values that Go currently has references to, indexed by reference id
         NaN,
         0,
@@ -389,18 +389,18 @@
         [this, 6]
       ]), this._idPool = [], this.exited = !1;
       let i = 4096;
-      const s = (d) => {
-        const t = i, e = h.encode(d + "\0");
+      const s = (g) => {
+        const t = i, e = h.encode(g + "\0");
         return new Uint8Array(this.mem.buffer, i, e.length).set(e), i += e.length, i % 8 !== 0 && (i += 8 - i % 8), t;
-      }, r = this.argv.length, a = [];
-      this.argv.forEach((d) => {
-        a.push(s(d));
-      }), a.push(0), Object.keys(this.env).sort().forEach((d) => {
-        a.push(s(`${d}=${this.env[d]}`));
-      }), a.push(0);
+      }, r = this.argv.length, c = [];
+      this.argv.forEach((g) => {
+        c.push(s(g));
+      }), c.push(0), Object.keys(this.env).sort().forEach((g) => {
+        c.push(s(`${g}=${this.env[g]}`));
+      }), c.push(0);
       const u = i;
-      if (a.forEach((d) => {
-        this.mem.setUint32(i, d, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
+      if (c.forEach((g) => {
+        this.mem.setUint32(i, g, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
       }), i >= 12288)
         throw new Error("total length of command line and environment variables exceeds limit");
       this._inst.exports.run(r, u), this.exited && this._resolveExitPromise(), await this._exitPromise;
@@ -410,25 +410,25 @@
         throw new Error("Go program has already exited");
       this._inst.exports.resume(), this.exited && this._resolveExitPromise();
     }
-    _makeFuncWrapper(c) {
+    _makeFuncWrapper(l) {
       const i = this;
       return function() {
-        const s = { id: c, this: this, args: arguments };
+        const s = { id: l, this: this, args: arguments };
         return i._pendingEvent = s, i._resume(), s.result;
       };
     }
   };
 })();
-const b = new URL("main.wasm", import.meta.url).href;
+const x = new URL("main.wasm", import.meta.url).href;
 (() => {
   const n = globalThis, h = "process";
   n[h] ? n[h].pid == null && (n[h].pid = 1) : n[h] = { pid: 1 };
 })();
 let _ = !1;
-async function x() {
+async function b() {
   if (_) return;
   const n = new globalThis.Go(), h = await WebAssembly.instantiateStreaming(
-    fetch(b),
+    fetch(x),
     n.importObject
   );
   n.run(h.instance), _ = !0;
@@ -481,7 +481,7 @@ const p = {
    * })
    */
   async init(n = {}) {
-    return await x(), f().init(n);
+    return await b(), f().init(n);
   },
   /**
    * Send an ICMP ping to addr and measure round-trip time.
@@ -515,16 +515,58 @@ const p = {
   async dialTCP(n) {
     const h = await f().dialTCP(n);
     return {
-      onData(g) {
-        h.onData(g);
+      onData(d) {
+        h.onData(d);
       },
-      write(g) {
+      write(d) {
         h.write(
-          typeof g == "string" ? new TextEncoder().encode(g) : g
+          typeof d == "string" ? new TextEncoder().encode(d) : d
         );
       },
       close() {
         h.close();
+      }
+    };
+  },
+  /**
+   * Listen for inbound TCP connections on the given Tailscale port.
+   * Pass port 0 (default) to get an ephemeral port assigned automatically.
+   * onConnection is called for each accepted connection.
+   * Returns a Listener with the assigned port number and a close() method.
+   *
+   * @example
+   * const listener = await network.listenTCP(8080, conn => {
+   *   conn.onData(data => console.log(new TextDecoder().decode(data)))
+   *   conn.write("hello\n")
+   * })
+   * console.log("listening on port", listener.port)
+   *
+   * @example
+   * // Ephemeral port
+   * const listener = await network.listenTCP(0, conn => { conn.close() })
+   * console.log("assigned port:", listener.port)
+   * listener.close()
+   */
+  async listenTCP(n = 0, h) {
+    const d = await f().listenTCP(n, (l) => {
+      h({
+        onData(i) {
+          l.onData(i);
+        },
+        write(i) {
+          l.write(
+            typeof i == "string" ? new TextEncoder().encode(i) : i
+          );
+        },
+        close() {
+          l.close();
+        }
+      });
+    });
+    return {
+      port: d.port,
+      close() {
+        d.close();
       }
     };
   },

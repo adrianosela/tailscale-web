@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adrianosela/tailscale-web/internal/listener"
 	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnlocal"
 	"tailscale.com/logpolicy"
@@ -58,6 +59,8 @@ type Network struct {
 	backend    *ipnlocal.LocalBackend
 	dialer     *tsdial.Dialer
 	httpClient *http.Client
+	stack      *netstack.Impl
+	listeners  *listener.Registry
 }
 
 // PingResult is the result of an ICMP connectivity probe.
@@ -125,7 +128,6 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 
 	log.Println("tailscale-web: starting...")
 
-	n := &Network{}
 	sys := tsd.NewSystem()
 
 	// Resolve the state store: prefer explicit, then localStorage, then in-memory.
@@ -145,7 +147,6 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	sys.Set(store)
 
 	dialer := &tsdial.Dialer{Logf: logf}
-	n.dialer = dialer
 
 	eng, err := wgengine.NewUserspaceEngine(logf, wgengine.Config{
 		Dialer:        dialer,
@@ -160,20 +161,20 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	}
 	sys.Set(eng)
 
-	ns, err := netstack.Create(logf, sys.Tun.Get(), eng, sys.MagicSock.Get(), dialer, sys.DNSManager.Get(), sys.ProxyMapper())
+	stack, err := netstack.Create(logf, sys.Tun.Get(), eng, sys.MagicSock.Get(), dialer, sys.DNSManager.Get(), sys.ProxyMapper())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create netstack: %w", err)
 	}
-	sys.Set(ns)
-	ns.ProcessLocalIPs = true
-	ns.ProcessSubnets = true
+	sys.Set(stack)
+	stack.ProcessLocalIPs = true
+	stack.ProcessSubnets = true
 
 	dialer.UseNetstackForIP = func(ip netip.Addr) bool { return true }
 	dialer.NetstackDialTCP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
-		return ns.DialContextTCP(ctx, dst)
+		return stack.DialContextTCP(ctx, dst)
 	}
 	dialer.NetstackDialUDP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
-		return ns.DialContextUDP(ctx, dst)
+		return stack.DialContextUDP(ctx, dst)
 	}
 	sys.NetstackRouter.Set(true)
 	sys.Tun.Get().Start()
@@ -183,11 +184,25 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	if err != nil {
 		return nil, fmt.Errorf("failed to create backend: %w", err)
 	}
-	n.backend = backend
 
-	if err := ns.Start(backend); err != nil {
+	if err := stack.Start(backend); err != nil {
 		return nil, fmt.Errorf("failed to start netstack: %w", err)
 	}
+
+	listeners := listener.New()
+
+	n := &Network{
+		backend: backend,
+		dialer:  dialer,
+		stack:   stack,
+		httpClient: &http.Client{
+			Transport: &http.Transport{DialContext: dialer.UserDial},
+			Timeout:   30 * time.Second,
+		},
+		listeners: listeners,
+	}
+
+	stack.GetTCPHandlerForFlow = listeners.TCPHandler()
 
 	loginURLCh := make(chan string, 1)
 	backend.SetNotifyCallback(func(notif ipn.Notify) {
@@ -233,7 +248,6 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 			if onAuthComplete != nil {
 				onAuthComplete()
 			}
-			n.httpClient = n.newHTTPClient()
 			return n, nil
 		}
 		if st.BackendState == "Running" || st.BackendState == "NeedsLogin" {
@@ -259,7 +273,6 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 		return nil, err
 	}
 
-	n.httpClient = n.newHTTPClient()
 	return n, nil
 }
 
@@ -287,22 +300,17 @@ func waitForAuth(ctx context.Context, backend *ipnlocal.LocalBackend, onAuthComp
 	}
 }
 
-func (n *Network) newHTTPClient() *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			DialContext: n.dialer.UserDial,
-		},
-		Timeout: 30 * time.Second,
-	}
-}
-
 // Dial opens a TCP connection through the Tailscale network.
 func (n *Network) Dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	return n.dialer.UserDial(ctx, network, addr)
 }
 
-// Ping sends an ICMP echo request to addr and measures round-trip time.
-// addr may be a hostname or IP address; any port suffix is ignored.
+// Listen opens a TCP listener on the Tailscale network for inbound connections
+// from peers. Pass port 0 to have an ephemeral port assigned automatically.
+func (n *Network) Listen(port int) (net.Listener, error) {
+	return n.listeners.Listen(port)
+}
+
 // Ping sends an ICMP echo request to addr and measures round-trip time.
 // addr may be a Tailscale IP address, a MagicDNS hostname (full or short), or
 // a machine hostname. Any port suffix is stripped and ignored.

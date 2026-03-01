@@ -1,4 +1,4 @@
-import { network, type Connection, type PingResult } from "tailscale-web";
+import { network, type Connection, type Listener, type PingResult } from "tailscale-web";
 import src from "./main.ts?raw";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -434,6 +434,58 @@ el("btn-dial-disconnect").addEventListener("click", () => {
   show("dial-connect-form");
 });
 
+// ── Listen ────────────────────────────────────────────────────────────────────
+
+let activeListener: Listener | null = null;
+let listenConnCount = 0;
+
+el("btn-listen-start").addEventListener("click", async () => {
+  const portInput = el<HTMLInputElement>("listen-port");
+  const btn = el<HTMLButtonElement>("btn-listen-start");
+  const port = parseInt(portInput.value || "0", 10);
+
+  hide("listen-error");
+  btn.disabled = true;
+  btn.textContent = "Listening…";
+
+  try {
+    const listener = await network.listenTCP(port, (conn: Connection) => {
+      listenConnCount++;
+      const connId = listenConnCount;
+      appendLine("listen-output", "line-ok", `→ connection #${connId} accepted`);
+
+      conn.onData((data) => {
+        const text = new TextDecoder().decode(data);
+        appendLine("listen-output", "line-recv", `  [#${connId}] ${text.trimEnd()}`);
+      });
+    });
+
+    activeListener = listener;
+    listenConnCount = 0;
+
+    el("listen-output").textContent = "";
+    text("listen-assigned-port", String(listener.port));
+    appendLine("listen-output", "line-meta", `listening on port ${listener.port}…`);
+
+    hide("listen-form");
+    show("listen-session");
+  } catch (err) {
+    showError("listen-error", String(err));
+    btn.disabled = false;
+    btn.textContent = "Listen";
+  }
+});
+
+el("btn-listen-stop").addEventListener("click", () => {
+  activeListener?.close();
+  activeListener = null;
+  appendLine("listen-output", "line-meta", "listener stopped");
+  hide("listen-session");
+  show("listen-form");
+  el<HTMLButtonElement>("btn-listen-start").disabled = false;
+  el<HTMLButtonElement>("btn-listen-start").textContent = "Listen";
+});
+
 // ── Exit node selector ────────────────────────────────────────────────────────
 
 function populateExitNodeSelect() {
@@ -733,7 +785,8 @@ el("btn-dns-refresh").addEventListener("click", () => {
 const codeSections: Record<string, [string, string]> = {
   ping: ["// ── Ping ──", "// ── Fetch ──"],
   fetch: ["// ── Fetch ──", "// ── Dial ──"],
-  dial: ["// ── Dial ──", "// ── Exit node selector ──"],
+  dial: ["// ── Dial ──", "// ── Listen ──"],
+  listen: ["// ── Listen ──", "// ── Exit node selector ──"],
   routes: ["// ── Exit node selector ──", "// ── DNS ──"],
   dns: ["// ── DNS ──", "// ── Code viewer ──"],
 };

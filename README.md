@@ -5,7 +5,7 @@
 [![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/master/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/adrianosela/tailscale-web)](https://goreportcard.com/report/github.com/adrianosela/tailscale-web)
 
-Run a [Tailscale](https://tailscale.com) device directly in the browser. Make HTTP requests, open TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
+Run a [Tailscale](https://tailscale.com) device directly in the browser. Make HTTP requests, dial or listen for TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
 
 <details>
 <summary>**Click here for motivation**</summary>
@@ -170,6 +170,24 @@ conn.onData(data => {
 
 conn.write("hello\n")
 conn.close()
+```
+
+### `network.listenTCP(port?, onConnection)`
+
+Accept inbound TCP connections on a Tailscale port. Pass `0` (or omit) for an ephemeral port. Returns a `Listener` with the assigned `port` and a `close()` method.
+
+```ts
+const listener = await network.listenTCP(8080, conn => {
+  conn.onData(data => {
+    console.log(new TextDecoder().decode(data))
+    conn.write("pong\n")
+  })
+})
+
+console.log("listening on port", listener.port)
+
+// stop accepting connections
+listener.close()
 ```
 
 ### Exit nodes

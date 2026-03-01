@@ -100,6 +100,13 @@ export interface Connection {
   close(): void;
 }
 
+export interface Listener {
+  /** The port number the listener is bound to. */
+  port: number;
+  /** Stop the listener and release all resources. */
+  close(): void;
+}
+
 export interface Response {
   status: number;
   statusText: string;
@@ -242,6 +249,52 @@ export const network = {
           typeof data === "string" ? new TextEncoder().encode(data) : data,
         );
       },
+      close() {
+        raw.close();
+      },
+    };
+  },
+
+  /**
+   * Listen for inbound TCP connections on the given Tailscale port.
+   * Pass port 0 (default) to get an ephemeral port assigned automatically.
+   * onConnection is called for each accepted connection.
+   * Returns a Listener with the assigned port number and a close() method.
+   *
+   * @example
+   * const listener = await network.listenTCP(8080, conn => {
+   *   conn.onData(data => console.log(new TextDecoder().decode(data)))
+   *   conn.write("hello\n")
+   * })
+   * console.log("listening on port", listener.port)
+   *
+   * @example
+   * // Ephemeral port
+   * const listener = await network.listenTCP(0, conn => { conn.close() })
+   * console.log("assigned port:", listener.port)
+   * listener.close()
+   */
+  async listenTCP(
+    port: number = 0,
+    onConnection: (conn: Connection) => void,
+  ): Promise<Listener> {
+    const raw = await api().listenTCP(port, (rawConn: any) => {
+      onConnection({
+        onData(handler: (data: Uint8Array) => void) {
+          rawConn.onData(handler);
+        },
+        write(data: Uint8Array | string) {
+          rawConn.write(
+            typeof data === "string" ? new TextEncoder().encode(data) : data,
+          );
+        },
+        close() {
+          rawConn.close();
+        },
+      });
+    });
+    return {
+      port: raw.port,
       close() {
         raw.close();
       },

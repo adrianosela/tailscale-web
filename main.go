@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"log"
+	"net"
 	"syscall/js"
 
 	"github.com/adrianosela/tailscale-web/internal/network"
@@ -33,6 +34,7 @@ func main() {
 	ns.Set("init", js.FuncOf(initFn))
 	ns.Set("ping", js.FuncOf(pingFn))
 	ns.Set("dialTCP", js.FuncOf(dialFn))
+	ns.Set("listenTCP", js.FuncOf(listenFn))
 	ns.Set("fetch", js.FuncOf(fetchFn))
 	ns.Set("getPrefs", js.FuncOf(getPrefsFn))
 	ns.Set("setAcceptRoutes", js.FuncOf(setAcceptRoutesFn))
@@ -142,53 +144,57 @@ func dialFn(this js.Value, args []js.Value) any {
 			reject(err)
 			return
 		}
+		resolve(newJSConn(conn))
+	})
+}
 
-		var onDataCb js.Value
+// listenTCP(port, onConnection)
+//
+// Listens on the given Tailscale TCP port and calls onConnection(conn) for
+// each accepted connection. Pass port 0 for an ephemeral port.
+// Returns a Promise<{ port: number, close() }>.
+func listenFn(this js.Value, args []js.Value) any {
+	if len(args) < 2 {
+		return promise.Reject("listenTCP: port and onConnection required")
+	}
+	port := args[0].Int()
+	onConnection := args[1]
+	if onConnection.Type() != js.TypeFunction {
+		return promise.Reject("listenTCP: onConnection must be a function")
+	}
+	return promise.New(func(resolve, reject func(any)) {
+		if tsNet == nil {
+			reject(fmt.Errorf("not initialized — call init() first"))
+			return
+		}
+		ln, err := tsNet.Listen(port)
+		if err != nil {
+			reject(err)
+			return
+		}
 
-		var writeFn, onDataFn, closeFn js.Func
-
-		writeFn = js.FuncOf(func(this js.Value, args []js.Value) any {
-			if len(args) > 0 {
-				go conn.Write(jsutil.ToBytes(args[0]))
-			}
-			return nil
-		})
-
-		onDataFn = js.FuncOf(func(this js.Value, args []js.Value) any {
-			if len(args) > 0 && args[0].Type() == js.TypeFunction {
-				onDataCb = args[0]
-			}
-			return nil
-		})
-
+		var closeFn js.Func
 		closeFn = js.FuncOf(func(this js.Value, args []js.Value) any {
-			conn.Close()
-			writeFn.Release()
-			onDataFn.Release()
+			ln.Close()
 			closeFn.Release()
 			return nil
 		})
 
-		jsConn := jsutil.NewObject()
-		jsConn.Set("write", writeFn)
-		jsConn.Set("onData", onDataFn)
-		jsConn.Set("close", closeFn)
+		jsListener := jsutil.NewObject()
+		jsListener.Set("port", ln.Addr().(*net.TCPAddr).Port)
+		jsListener.Set("close", closeFn)
 
-		// Pump reads back to JS.
 		go func() {
-			buf := make([]byte, 32*1024)
 			for {
-				n, err := conn.Read(buf)
-				if n > 0 && onDataCb.Type() == js.TypeFunction {
-					onDataCb.Invoke(jsutil.ToUint8Array(buf[:n]))
-				}
+				conn, err := ln.Accept()
 				if err != nil {
 					break
 				}
+				onConnection.Invoke(newJSConn(conn))
 			}
 		}()
 
-		resolve(jsConn)
+		resolve(jsListener)
 	})
 }
 

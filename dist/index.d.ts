@@ -56,6 +56,13 @@ export declare interface InitOptions {
     onAuthComplete?: () => void;
 }
 
+export declare interface Listener {
+    /** The port number the listener is bound to. */
+    port: number;
+    /** Stop the listener and release all resources. */
+    close(): void;
+}
+
 export declare const network: {
     /**
      * Initialize and connect the Tailscale node. Must be called before any
@@ -117,6 +124,26 @@ export declare const network: {
      * conn.close()
      */
     dialTCP(addr: string): Promise<Connection>;
+    /**
+     * Listen for inbound TCP connections on the given Tailscale port.
+     * Pass port 0 (default) to get an ephemeral port assigned automatically.
+     * onConnection is called for each accepted connection.
+     * Returns a Listener with the assigned port number and a close() method.
+     *
+     * @example
+     * const listener = await network.listenTCP(8080, conn => {
+     *   conn.onData(data => console.log(new TextDecoder().decode(data)))
+     *   conn.write("hello\n")
+     * })
+     * console.log("listening on port", listener.port)
+     *
+     * @example
+     * // Ephemeral port
+     * const listener = await network.listenTCP(0, conn => { conn.close() })
+     * console.log("assigned port:", listener.port)
+     * listener.close()
+     */
+    listenTCP(port: number | undefined, onConnection: (conn: Connection) => void): Promise<Listener>;
     /**
      * Make an HTTP request through the Tailscale network. Supports method,
      * headers, and body. Does not yet support AbortSignal, streaming bodies
