@@ -9,18 +9,18 @@
       constants: { O_WRONLY: -1, O_RDWR: -1, O_CREAT: -1, O_TRUNC: -1, O_APPEND: -1, O_EXCL: -1, O_DIRECTORY: -1 },
       // unused
       writeSync(i, s) {
-        l += d.decode(s);
+        l += f.decode(s);
         const r = l.lastIndexOf(`
 `);
         return r != -1 && (console.log(l.substring(0, r)), l = l.substring(r + 1)), s.length;
       },
-      write(i, s, r, c, y, u) {
+      write(i, s, r, c, y, m) {
         if (r !== 0 || c !== s.length || y !== null) {
-          u(n());
+          m(n());
           return;
         }
         const w = this.writeSync(i, s);
-        u(null, w);
+        m(null, w);
       },
       chmod(i, s, r) {
         r(n());
@@ -61,8 +61,8 @@
       open(i, s, r, c) {
         c(n());
       },
-      read(i, s, r, c, y, u) {
-        u(n());
+      read(i, s, r, c, y, m) {
+        m(n());
       },
       readdir(i, s) {
         s(n());
@@ -132,7 +132,7 @@
     throw new Error("globalThis.TextEncoder is not available, polyfill required");
   if (!globalThis.TextDecoder)
     throw new Error("globalThis.TextDecoder is not available, polyfill required");
-  const h = new TextEncoder("utf-8"), d = new TextDecoder("utf-8");
+  const h = new TextEncoder("utf-8"), f = new TextDecoder("utf-8");
   globalThis.Go = class {
     constructor() {
       this.argv = ["js"], this.env = {}, this.exit = (t) => {
@@ -168,33 +168,33 @@
         }
         let a = this._ids.get(e);
         a === void 0 && (a = this._idPool.pop(), a === void 0 && (a = this._values.length), this._values[a] = e, this._goRefCounts[a] = 0, this._ids.set(e, a)), this._goRefCounts[a]++;
-        let m = 0;
+        let d = 0;
         switch (typeof e) {
           case "object":
-            e !== null && (m = 1);
+            e !== null && (d = 1);
             break;
           case "string":
-            m = 2;
+            d = 2;
             break;
           case "symbol":
-            m = 3;
+            d = 3;
             break;
           case "function":
-            m = 4;
+            d = 4;
             break;
         }
-        this.mem.setUint32(t + 4, 2146959360 | m, !0), this.mem.setUint32(t, a, !0);
+        this.mem.setUint32(t + 4, 2146959360 | d, !0), this.mem.setUint32(t, a, !0);
       }, c = (t) => {
         const e = i(t + 0), o = i(t + 8);
         return new Uint8Array(this._inst.exports.mem.buffer, e, o);
       }, y = (t) => {
         const e = i(t + 0), o = i(t + 8), a = new Array(o);
-        for (let m = 0; m < o; m++)
-          a[m] = s(e + m * 8);
+        for (let d = 0; d < o; d++)
+          a[d] = s(e + d * 8);
         return a;
-      }, u = (t) => {
+      }, m = (t) => {
         const e = i(t + 0), o = i(t + 8);
-        return d.decode(new DataView(this._inst.exports.mem.buffer, e, o));
+        return f.decode(new DataView(this._inst.exports.mem.buffer, e, o));
       }, w = (t, e) => (this._inst.exports.testExport0(), this._inst.exports.testExport(t, e)), g = Date.now() - performance.now();
       this.importObject = {
         _gotest: {
@@ -265,21 +265,21 @@
           },
           // func stringVal(value string) ref
           "syscall/js.stringVal": (t) => {
-            t >>>= 0, r(t + 24, u(t + 8));
+            t >>>= 0, r(t + 24, m(t + 8));
           },
           // func valueGet(v ref, p string) ref
           "syscall/js.valueGet": (t) => {
             t >>>= 0;
-            const e = Reflect.get(s(t + 8), u(t + 16));
+            const e = Reflect.get(s(t + 8), m(t + 16));
             t = this._inst.exports.getsp() >>> 0, r(t + 32, e);
           },
           // func valueSet(v ref, p string, x ref)
           "syscall/js.valueSet": (t) => {
-            t >>>= 0, Reflect.set(s(t + 8), u(t + 16), s(t + 32));
+            t >>>= 0, Reflect.set(s(t + 8), m(t + 16), s(t + 32));
           },
           // func valueDelete(v ref, p string)
           "syscall/js.valueDelete": (t) => {
-            t >>>= 0, Reflect.deleteProperty(s(t + 8), u(t + 16));
+            t >>>= 0, Reflect.deleteProperty(s(t + 8), m(t + 16));
           },
           // func valueIndex(v ref, i int) ref
           "syscall/js.valueIndex": (t) => {
@@ -293,8 +293,8 @@
           "syscall/js.valueCall": (t) => {
             t >>>= 0;
             try {
-              const e = s(t + 8), o = Reflect.get(e, u(t + 16)), a = y(t + 32), m = Reflect.apply(o, e, a);
-              t = this._inst.exports.getsp() >>> 0, r(t + 56, m), this.mem.setUint8(t + 64, 1);
+              const e = s(t + 8), o = Reflect.get(e, m(t + 16)), a = y(t + 32), d = Reflect.apply(o, e, a);
+              t = this._inst.exports.getsp() >>> 0, r(t + 56, d), this.mem.setUint8(t + 64, 1);
             } catch (e) {
               t = this._inst.exports.getsp() >>> 0, r(t + 56, e), this.mem.setUint8(t + 64, 0);
             }
@@ -398,12 +398,12 @@
       }), c.push(0), Object.keys(this.env).sort().forEach((g) => {
         c.push(s(`${g}=${this.env[g]}`));
       }), c.push(0);
-      const u = i;
+      const m = i;
       if (c.forEach((g) => {
         this.mem.setUint32(i, g, !0), this.mem.setUint32(i + 4, 0, !0), i += 8;
       }), i >= 12288)
         throw new Error("total length of command line and environment variables exceeds limit");
-      this._inst.exports.run(r, u), this.exited && this._resolveExitPromise(), await this._exitPromise;
+      this._inst.exports.run(r, m), this.exited && this._resolveExitPromise(), await this._exitPromise;
     }
     _resume() {
       if (this.exited)
@@ -433,7 +433,7 @@ async function b() {
   );
   n.run(h.instance), _ = !0;
 }
-function f() {
+function u() {
   return globalThis.__tailscaleWeb;
 }
 function T(n) {
@@ -481,7 +481,7 @@ const p = {
    * })
    */
   async init(n = {}) {
-    return await b(), f().init(n);
+    return await b(), u().init(n);
   },
   /**
    * Send an ICMP ping to addr and measure round-trip time.
@@ -496,7 +496,7 @@ const p = {
    * }
    */
   async ping(n) {
-    return f().ping(n);
+    return u().ping(n);
   },
   /**
    * Open a raw TCP connection through the Tailscale network.
@@ -513,14 +513,14 @@ const p = {
    * conn.close()
    */
   async dialTCP(n) {
-    const h = await f().dialTCP(n);
+    const h = await u().dialTCP(n);
     return {
-      onData(d) {
-        h.onData(d);
+      onData(f) {
+        h.onData(f);
       },
-      write(d) {
+      write(f) {
         h.write(
-          typeof d == "string" ? new TextEncoder().encode(d) : d
+          typeof f == "string" ? new TextEncoder().encode(f) : f
         );
       },
       close() {
@@ -548,7 +548,7 @@ const p = {
    * listener.close()
    */
   async listenTCP(n = 0, h) {
-    const d = await f().listenTCP(n, (l) => {
+    const f = await u().listenTCP(n, (l) => {
       h({
         onData(i) {
           l.onData(i);
@@ -564,9 +564,9 @@ const p = {
       });
     });
     return {
-      port: d.port,
+      port: f.port,
       close() {
-        d.close();
+        f.close();
       }
     };
   },
@@ -585,7 +585,21 @@ const p = {
    * const data = await resp.json()
    */
   async fetch(n, h = {}) {
-    return T(await f().fetch(n, h));
+    return T(await u().fetch(n, h));
+  },
+  /**
+   * Return this node's Tailscale IPv4 address, or an empty string if not yet assigned.
+   * Synchronous — no await needed. Must be called after init() resolves.
+   */
+  localIPv4() {
+    return u().localIPv4();
+  },
+  /**
+   * Return this node's Tailscale IPv6 address, or an empty string if not yet assigned.
+   * Synchronous — no await needed. Must be called after init() resolves.
+   */
+  localIPv6() {
+    return u().localIPv6();
   },
   /**
    * Return the current preferences (acceptRoutes, exitNodeId).
@@ -596,7 +610,7 @@ const p = {
    * console.log("exit node:", exitNodeId || "(none)")
    */
   getPrefs() {
-    return f().getPrefs();
+    return u().getPrefs();
   },
   /**
    * Enable or disable acceptance of subnet routes advertised by peers.
@@ -606,7 +620,7 @@ const p = {
    * await network.setAcceptRoutes(true)
    */
   async setAcceptRoutes(n) {
-    return f().setAcceptRoutes(n);
+    return u().setAcceptRoutes(n);
   },
   /**
    * Return all peers that advertise exit-node capability.
@@ -619,7 +633,7 @@ const p = {
    * }
    */
   listExitNodes() {
-    return Array.from(f().listExitNodes());
+    return Array.from(u().listExitNodes());
   },
   /**
    * Activate an exit node by its stable node ID.
@@ -635,7 +649,7 @@ const p = {
    * await network.setExitNode()
    */
   async setExitNode(n = "") {
-    return f().setExitNode(n);
+    return u().setExitNode(n);
   },
   /**
    * Return the full routing table (self + all peers).
@@ -648,7 +662,7 @@ const p = {
    * }
    */
   getRoutes() {
-    return Array.from(f().getRoutes());
+    return Array.from(u().getRoutes());
   },
   /**
    * Return the current Tailscale-managed DNS configuration.
@@ -663,7 +677,7 @@ const p = {
    * }
    */
   getDNS() {
-    return f().getDNS();
+    return u().getDNS();
   }
 };
 export {

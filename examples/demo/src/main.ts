@@ -157,6 +157,13 @@ function showApp() {
   hide("screen-login");
   show("screen-app");
   updateExitNodeIndicator();
+
+  const v4 = network.localIPv4();
+  const v6 = network.localIPv6();
+  if (v4) text("vpn-ipv4", v4);
+  if (v6) text("vpn-ipv6", v6);
+  if (v4 || v6) show("vpn-addrs");
+
   tabRenderers["routes"] = renderRoutes;
   tabRenderers["dns"] = renderDNS;
 }

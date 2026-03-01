@@ -36,6 +36,8 @@ func main() {
 	ns.Set("dialTCP", js.FuncOf(dialFn))
 	ns.Set("listenTCP", js.FuncOf(listenFn))
 	ns.Set("fetch", js.FuncOf(fetchFn))
+	ns.Set("localIPv4", js.FuncOf(localIPv4Fn))
+	ns.Set("localIPv6", js.FuncOf(localIPv6Fn))
 	ns.Set("getPrefs", js.FuncOf(getPrefsFn))
 	ns.Set("setAcceptRoutes", js.FuncOf(setAcceptRoutesFn))
 	ns.Set("listExitNodes", js.FuncOf(listExitNodesFn))
@@ -196,6 +198,22 @@ func listenFn(this js.Value, args []js.Value) any {
 
 		resolve(jsListener)
 	})
+}
+
+// localIPv4() → string
+func localIPv4Fn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return ""
+	}
+	return tsNet.GetLocalIPv4()
+}
+
+// localIPv6() → string
+func localIPv6Fn(this js.Value, args []js.Value) any {
+	if tsNet == nil {
+		return ""
+	}
+	return tsNet.GetLocalIPv6()
 }
 
 // getPrefs() → { acceptRoutes: bool, exitNodeId: string }

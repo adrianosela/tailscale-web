@@ -424,6 +424,26 @@ func (n *Network) Close() error {
 	return nil
 }
 
+// GetLocalIPv4 returns the node's Tailscale IPv4 address, or empty string if unavailable.
+func (n *Network) GetLocalIPv4() string {
+	for _, ip := range n.backend.Status().TailscaleIPs {
+		if ip.Is4() {
+			return ip.String()
+		}
+	}
+	return ""
+}
+
+// GetLocalIPv6 returns the node's Tailscale IPv6 address, or empty string if unavailable.
+func (n *Network) GetLocalIPv6() string {
+	for _, ip := range n.backend.Status().TailscaleIPs {
+		if ip.Is6() {
+			return ip.String()
+		}
+	}
+	return ""
+}
+
 // GetPrefs returns the current relevant preferences.
 func (n *Network) GetPrefs() Prefs {
 	p := n.backend.Prefs()

@@ -123,6 +123,14 @@
         max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       .exit-node-indicator span { font-family: var(--mono); color: var(--text-secondary); }
+      .vpn-addrs {
+        display: flex; flex-direction: column; align-items: flex-start; gap: .1rem;
+        border-left: 1px solid var(--border-color); padding-left: .875rem;
+      }
+      .vpn-addr {
+        font-size: .6875rem; font-family: var(--mono); color: var(--text-secondary);
+        white-space: nowrap;
+      }
       .btn-link {
         background: none; border: none; padding: 0;
         font-size: .75rem; color: var(--text-muted);
@@ -381,6 +389,10 @@
                 VPN Connected
               </div>
               <div class="exit-node-indicator">exit node: <span id="exit-node-name">&lt;none&gt;</span></div>
+            </div>
+            <div class="vpn-addrs" id="vpn-addrs" hidden>
+              <div class="vpn-addr" id="vpn-ipv4"></div>
+              <div class="vpn-addr" id="vpn-ipv6"></div>
             </div>
             <button class="btn-link" id="btn-disconnect">Disconnect</button>
             <button class="btn-icon" id="btn-theme" title="Toggle theme">

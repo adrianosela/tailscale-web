@@ -160,6 +160,16 @@ export declare const network: {
      */
     fetch(url: string, init?: RequestInit_2): Promise<Response_2>;
     /**
+     * Return this node's Tailscale IPv4 address, or an empty string if not yet assigned.
+     * Synchronous — no await needed. Must be called after init() resolves.
+     */
+    localIPv4(): string;
+    /**
+     * Return this node's Tailscale IPv6 address, or an empty string if not yet assigned.
+     * Synchronous — no await needed. Must be called after init() resolves.
+     */
+    localIPv6(): string;
+    /**
      * Return the current preferences (acceptRoutes, exitNodeId).
      * Synchronous — no await needed. Must be called after init() resolves.
      *

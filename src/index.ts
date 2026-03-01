@@ -320,6 +320,22 @@ export const network = {
   },
 
   /**
+   * Return this node's Tailscale IPv4 address, or an empty string if not yet assigned.
+   * Synchronous — no await needed. Must be called after init() resolves.
+   */
+  localIPv4(): string {
+    return api().localIPv4();
+  },
+
+  /**
+   * Return this node's Tailscale IPv6 address, or an empty string if not yet assigned.
+   * Synchronous — no await needed. Must be called after init() resolves.
+   */
+  localIPv6(): string {
+    return api().localIPv6();
+  },
+
+  /**
    * Return the current preferences (acceptRoutes, exitNodeId).
    * Synchronous — no await needed. Must be called after init() resolves.
    *
