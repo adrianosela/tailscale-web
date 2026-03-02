@@ -2,13 +2,13 @@
 
 [![npm version](https://img.shields.io/npm/v/tailscale-web.svg?style=flat-square)](https://www.npmjs.org/package/tailscale-web)
 [![GitHub issues](https://img.shields.io/github/issues/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/issues)
-[![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/master/LICENSE)
+[![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/main/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/adrianosela/tailscale-web)](https://goreportcard.com/report/github.com/adrianosela/tailscale-web)
 
 Run a [Tailscale](https://tailscale.com) device directly in the browser. Make HTTP requests, dial or listen for TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
 
 <details>
-<summary>**Click here for motivation**</summary>
+<summary>Click here for motivation</summary>
 
 ### Motivation
 
@@ -74,7 +74,6 @@ import { network } from "tailscale-web"
 await network.init({
   hostname: "my-app",
   onAuthRequired(url) {
-
     // Open the URL however your environment allows
     console.log("Authenticate at:", url)
   },
@@ -91,9 +90,9 @@ In a browser, state is persisted to `localStorage` automatically, so the device 
 
 ## API
 
-### `network.init(options?)`
+### Initialize
 
-Loads the WASM, starts the Tailscale node, and waits until it is authenticated and ready. Must be called before any other method.
+`network.init(options?)` — Loads the WASM, starts the Tailscale node, and waits until it is authenticated and ready. Must be called before any other method.
 
 If the node has persisted state it reconnects automatically; otherwise the OAuth flow is started and `onAuthRequired` is called with the login URL. Rejects if the auth URL does not arrive within 60 seconds, or if the user does not complete authentication within 5 minutes.
 
@@ -132,9 +131,9 @@ await network.init({
 })
 ```
 
-### `network.fetch(url, init?)`
+### Fetch (HTTP Client)
 
-Make an HTTP/HTTPS request through the tailnet. Supports `method`, `headers`, and `body`. Does not yet support `AbortSignal`, streaming bodies or responses, or other advanced Fetch API options (`mode`, `credentials`, `cache`, `redirect`).
+`network.fetch(url, init?)` — Make an HTTP/HTTPS request through the tailnet. Supports `method`, `headers`, and `body`. Does not yet support `AbortSignal`, streaming bodies or responses, or other advanced Fetch API options (`mode`, `credentials`, `cache`, `redirect`).
 
 ```ts
 const resp = await network.fetch("https://internal-service/api", {
@@ -148,18 +147,18 @@ console.log(resp.ok)            // true
 const data = await resp.json()
 ```
 
-### `network.ping(addr)`
+### Ping (ICMP)
 
-ICMP ping a peer and measure round-trip time. `addr` may be a hostname or Tailscale IP.
+`network.ping(addr)` — ICMP ping a peer and measure round-trip time. `addr` may be a hostname or Tailscale IP.
 
 ```ts
 const result = await network.ping("my-server")
 // { alive: true, rttMs: 3.2, nodeName: "my-server", nodeIP: "100.x.x.x", ... }
 ```
 
-### `network.dialTCP(addr)`
+### Dial TCP
 
-Open a raw TCP connection through the tailnet. Returns a `Connection` object.
+`network.dialTCP(addr)` — Open a raw TCP connection through the tailnet. Returns a `Connection` object.
 
 ```ts
 const conn = await network.dialTCP("my-server:8080")
@@ -172,9 +171,9 @@ conn.write("hello\n")
 conn.close()
 ```
 
-### `network.listenTCP(port?, onConnection)`
+### Listen TCP
 
-Accept inbound TCP connections on a Tailscale port. Pass `0` (or omit) for an ephemeral port. Returns a `Listener` with the assigned `port` and a `close()` method.
+`network.listenTCP(port?, onConnection)` — Accept inbound TCP connections on a Tailscale port. Pass `0` (or omit) for an ephemeral port. Returns a `Listener` with the assigned `port` and a `close()` method.
 
 ```ts
 const listener = await network.listenTCP(8080, conn => {

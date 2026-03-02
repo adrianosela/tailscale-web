@@ -493,6 +493,76 @@ el("btn-listen-stop").addEventListener("click", () => {
   el<HTMLButtonElement>("btn-listen-start").textContent = "Listen";
 });
 
+// ── Serve HTTP ────────────────────────────────────────────────────────────────
+
+let serveListener: Listener | null = null;
+let serveReqCount = 0;
+
+el("btn-serve-start").addEventListener("click", async () => {
+  const btn = el<HTMLButtonElement>("btn-serve-start");
+  const port = parseInt(el<HTMLInputElement>("serve-port").value || "0", 10);
+
+  hide("serve-error");
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+
+  try {
+    const listener = await network.listenTCP(port, (conn: Connection) => {
+      serveReqCount++;
+      const reqId = serveReqCount;
+      let buf = "";
+
+      conn.onData((data) => {
+        buf += new TextDecoder().decode(data);
+        if (!buf.includes("\r\n\r\n")) return;
+
+        // Parse request line for logging.
+        const reqLine = buf.split("\r\n")[0] ?? "";
+        appendLine("serve-output", "line-ok", `→ [#${reqId}] ${reqLine}`);
+
+        // Build response.
+        const body = el<HTMLTextAreaElement>("serve-html").value;
+        const bodyBytes = new TextEncoder().encode(body);
+        const response =
+          "HTTP/1.1 200 OK\r\n" +
+          "Content-Type: text/html; charset=utf-8\r\n" +
+          `Content-Length: ${bodyBytes.length}\r\n` +
+          "Connection: close\r\n" +
+          "\r\n" +
+          body;
+
+        conn.write(response);
+        conn.close();
+        appendLine("serve-output", "line-meta", `  [#${reqId}] 200 OK — ${bodyBytes.length} bytes`);
+      });
+    });
+
+    serveListener = listener;
+    serveReqCount = 0;
+
+    el("serve-output").textContent = "";
+    text("serve-assigned-port", String(listener.port));
+    appendLine("serve-output", "line-meta", `listening on port ${listener.port}…`);
+
+    hide("serve-form");
+    show("serve-session");
+  } catch (err) {
+    showError("serve-error", String(err));
+    btn.disabled = false;
+    btn.textContent = "Serve";
+  }
+});
+
+el("btn-serve-stop").addEventListener("click", () => {
+  serveListener?.close();
+  serveListener = null;
+  appendLine("serve-output", "line-meta", "server stopped");
+  hide("serve-session");
+  show("serve-form");
+  el<HTMLButtonElement>("btn-serve-start").disabled = false;
+  el<HTMLButtonElement>("btn-serve-start").textContent = "Serve";
+});
+
 // ── Exit node selector ────────────────────────────────────────────────────────
 
 function populateExitNodeSelect() {
@@ -793,7 +863,8 @@ const codeSections: Record<string, [string, string]> = {
   ping: ["// ── Ping ──", "// ── Fetch ──"],
   fetch: ["// ── Fetch ──", "// ── Dial ──"],
   dial: ["// ── Dial ──", "// ── Listen ──"],
-  listen: ["// ── Listen ──", "// ── Exit node selector ──"],
+  listen: ["// ── Listen ──", "// ── Serve HTTP ──"],
+  serve: ["// ── Serve HTTP ──", "// ── Exit node selector ──"],
   routes: ["// ── Exit node selector ──", "// ── DNS ──"],
   dns: ["// ── DNS ──", "// ── Code viewer ──"],
 };

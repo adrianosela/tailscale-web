@@ -1,6 +1,6 @@
 {
   "name": "tailscale-web",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Run a Tailscale node in JS environments via WebAssembly",
   "type": "module",
   "main": "./dist/tailscale-web.umd.js",

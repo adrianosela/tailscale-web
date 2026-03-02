@@ -129,22 +129,7 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	log.Println("tailscale-web: starting...")
 
 	sys := tsd.NewSystem()
-
-	// Resolve the state store: prefer explicit, then localStorage, then in-memory.
-	store := cfg.Store
-	if store == nil {
-		if isLocalStorageAvailable() {
-			prefix := cfg.StoragePrefix
-			if prefix == "" {
-				prefix = "tailscale-web"
-			}
-			store = newLocalStorageStore(prefix, logf)
-		} else {
-			logf("tailscale-web: localStorage not available, using in-memory store (state will not persist)")
-			store = newMemStore()
-		}
-	}
-	sys.Set(store)
+	sys.Set(resolveStore(cfg, logf))
 
 	dialer := &tsdial.Dialer{Logf: logf}
 
@@ -161,23 +146,10 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	}
 	sys.Set(eng)
 
-	stack, err := netstack.Create(logf, sys.Tun.Get(), eng, sys.MagicSock.Get(), dialer, sys.DNSManager.Get(), sys.ProxyMapper())
+	stack, err := newNetstack(logf, sys, eng, dialer)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create netstack: %w", err)
+		return nil, err
 	}
-	sys.Set(stack)
-	stack.ProcessLocalIPs = true
-	stack.ProcessSubnets = true
-
-	dialer.UseNetstackForIP = func(ip netip.Addr) bool { return true }
-	dialer.NetstackDialTCP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
-		return stack.DialContextTCP(ctx, dst)
-	}
-	dialer.NetstackDialUDP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
-		return stack.DialContextUDP(ctx, dst)
-	}
-	sys.NetstackRouter.Set(true)
-	sys.Tun.Get().Start()
 
 	lpc := logpolicy.NewConfig(logtail.CollectionNode)
 	backend, err := ipnlocal.NewLocalBackend(logf, lpc.PublicID, sys, 0)
@@ -205,55 +177,15 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	stack.GetTCPHandlerForFlow = listeners.TCPHandler()
 
 	loginURLCh := make(chan string, 1)
-	backend.SetNotifyCallback(func(notif ipn.Notify) {
-		if notif.State != nil {
-			log.Printf("tailscale-web: state=%s", *notif.State)
-		}
-		if notif.ErrMessage != nil {
-			log.Printf("tailscale-web: notice: %s", *notif.ErrMessage)
-		}
-		if notif.BrowseToURL != nil && *notif.BrowseToURL != "" {
-			url := *notif.BrowseToURL
-			log.Printf("tailscale-web: auth URL ready")
-			if onAuthRequired != nil {
-				onAuthRequired(url)
-			}
-			select {
-			case loginURLCh <- url:
-			default:
-			}
-		}
-	})
+	backend.SetNotifyCallback(notifyCallback(onAuthRequired, loginURLCh))
 
-	prefs := ipn.NewPrefs()
-	prefs.WantRunning = true
-	prefs.Hostname = cfg.Hostname
-	if cfg.ControlURL != "" {
-		prefs.ControlURL = cfg.ControlURL
-	} else {
-		prefs.ControlURL = ipn.DefaultControlURL
-	}
-
-	if err := backend.Start(ipn.Options{UpdatePrefs: prefs}); err != nil {
+	if err := backend.Start(ipn.Options{UpdatePrefs: buildPrefs(cfg)}); err != nil {
 		backend.Shutdown()
 		return nil, fmt.Errorf("failed to start backend: %w", err)
 	}
 
-	// Give the backend a moment to load persisted state.
-	time.Sleep(500 * time.Millisecond)
-	for start := time.Now(); time.Since(start) < 5*time.Second; {
-		st := backend.Status()
-		if len(st.TailscaleIPs) > 0 && !backend.NodeKey().IsZero() {
-			log.Printf("tailscale-web: restored from persisted state, IPs=%v", st.TailscaleIPs)
-			if onAuthComplete != nil {
-				onAuthComplete()
-			}
-			return n, nil
-		}
-		if st.BackendState == "Running" || st.BackendState == "NeedsLogin" {
-			break
-		}
-		time.Sleep(200 * time.Millisecond)
+	if ok := checkPersistedState(backend, onAuthComplete); ok {
+		return n, nil
 	}
 
 	// Need interactive login.
@@ -274,6 +206,101 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 	}
 
 	return n, nil
+}
+
+// resolveStore returns the state store to use: explicit > localStorage > in-memory.
+func resolveStore(cfg Config, logf logger.Logf) ipn.StateStore {
+	if cfg.Store != nil {
+		return cfg.Store
+	}
+	if isLocalStorageAvailable() {
+		prefix := cfg.StoragePrefix
+		if prefix == "" {
+			prefix = "tailscale-web"
+		}
+		return newLocalStorageStore(prefix, logf)
+	}
+	logf("tailscale-web: localStorage not available, using in-memory store (state will not persist)")
+	return newMemStore()
+}
+
+// newNetstack creates, configures, and starts the gVisor-based network stack.
+func newNetstack(logf logger.Logf, sys *tsd.System, eng wgengine.Engine, dialer *tsdial.Dialer) (*netstack.Impl, error) {
+	stack, err := netstack.Create(logf, sys.Tun.Get(), eng, sys.MagicSock.Get(), dialer, sys.DNSManager.Get(), sys.ProxyMapper())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create netstack: %w", err)
+	}
+	sys.Set(stack)
+	stack.ProcessLocalIPs = true
+	stack.ProcessSubnets = true
+
+	dialer.UseNetstackForIP = func(ip netip.Addr) bool { return true }
+	dialer.NetstackDialTCP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
+		return stack.DialContextTCP(ctx, dst)
+	}
+	dialer.NetstackDialUDP = func(ctx context.Context, dst netip.AddrPort) (net.Conn, error) {
+		return stack.DialContextUDP(ctx, dst)
+	}
+	sys.NetstackRouter.Set(true)
+	sys.Tun.Get().Start()
+	return stack, nil
+}
+
+// notifyCallback returns the backend notification handler.
+func notifyCallback(onAuthRequired OnAuthRequired, loginURLCh chan<- string) func(ipn.Notify) {
+	return func(notif ipn.Notify) {
+		if notif.State != nil {
+			log.Printf("tailscale-web: state=%s", *notif.State)
+		}
+		if notif.ErrMessage != nil {
+			log.Printf("tailscale-web: notice: %s", *notif.ErrMessage)
+		}
+		if notif.BrowseToURL == nil || *notif.BrowseToURL == "" {
+			return
+		}
+		url := *notif.BrowseToURL
+		log.Printf("tailscale-web: auth URL ready")
+		if onAuthRequired != nil {
+			onAuthRequired(url)
+		}
+		select {
+		case loginURLCh <- url:
+		default:
+		}
+	}
+}
+
+// buildPrefs constructs the initial Tailscale preferences from cfg.
+func buildPrefs(cfg Config) *ipn.Prefs {
+	prefs := ipn.NewPrefs()
+	prefs.WantRunning = true
+	prefs.Hostname = cfg.Hostname
+	prefs.ControlURL = ipn.DefaultControlURL
+	if cfg.ControlURL != "" {
+		prefs.ControlURL = cfg.ControlURL
+	}
+	return prefs
+}
+
+// checkPersistedState polls the backend briefly to see if it has recovered
+// from persisted state (already authenticated). Returns true if ready.
+func checkPersistedState(backend *ipnlocal.LocalBackend, onAuthComplete OnAuthComplete) bool {
+	time.Sleep(500 * time.Millisecond)
+	for start := time.Now(); time.Since(start) < 5*time.Second; {
+		st := backend.Status()
+		if len(st.TailscaleIPs) > 0 && !backend.NodeKey().IsZero() {
+			log.Printf("tailscale-web: restored from persisted state, IPs=%v", st.TailscaleIPs)
+			if onAuthComplete != nil {
+				onAuthComplete()
+			}
+			return true
+		}
+		if st.BackendState == "Running" || st.BackendState == "NeedsLogin" {
+			return false
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return false
 }
 
 func waitForAuth(ctx context.Context, backend *ipnlocal.LocalBackend, onAuthComplete OnAuthComplete) error {

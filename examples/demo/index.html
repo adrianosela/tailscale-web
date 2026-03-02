@@ -420,6 +420,7 @@
           <button class="nav-tab"        data-tab="fetch">Fetch</button>
           <button class="nav-tab"        data-tab="dial">Dial</button>
           <button class="nav-tab"        data-tab="listen">Listen</button>
+          <button class="nav-tab"        data-tab="serve">Serve HTTP</button>
           <button class="nav-tab"        data-tab="routes">Routes</button>
           <button class="nav-tab"        data-tab="dns">DNS</button>
           <button id="btn-view-code" class="btn-code" title="View source for this tab">
@@ -562,6 +563,35 @@
               <button id="btn-listen-stop" class="btn btn-danger" style="margin-left:auto;padding:.2rem .6rem;font-size:.75rem;">Stop</button>
             </div>
             <div id="listen-output" class="output" style="min-height:120px;max-height:480px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- Serve HTTP -->
+        <div id="tab-serve" class="tab-panel" hidden>
+          <div class="card" id="serve-form">
+            <div id="serve-error" class="error-banner" hidden></div>
+            <div class="field-row" style="margin-bottom:.875rem;">
+              <div class="field" style="flex:0;min-width:140px;">
+                <label>Port <span style="font-weight:400;color:var(--text-muted)">(0 = random)</span></label>
+                <input id="serve-port" type="number" placeholder="0" value="0" min="0" max="65535" />
+              </div>
+              <div class="field" style="flex:0;display:flex;align-items:flex-end;">
+                <button id="btn-serve-start" class="btn btn-primary">Serve</button>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>HTML to serve</label>
+              <textarea id="serve-html" style="min-height:160px;" placeholder="<h1>Hello from Tailscale!</h1>"></textarea>
+            </div>
+          </div>
+
+          <div id="serve-session" hidden>
+            <div class="conn-bar">
+              <div class="conn-bar-dot"></div>
+              <span>Serving on port <strong id="serve-assigned-port"></strong></span>
+              <button id="btn-serve-stop" class="btn btn-danger" style="margin-left:auto;padding:.2rem .6rem;font-size:.75rem;">Stop</button>
+            </div>
+            <div id="serve-output" class="output" style="min-height:120px;max-height:480px;overflow-y:auto;"></div>
           </div>
         </div>
 
