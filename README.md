@@ -5,6 +5,8 @@
 [![license](https://img.shields.io/github/license/adrianosela/tailscale-web.svg)](https://github.com/adrianosela/tailscale-web/blob/main/LICENSE)
 [![Go Report Card](https://goreportcard.com/badge/github.com/adrianosela/tailscale-web)](https://goreportcard.com/report/github.com/adrianosela/tailscale-web)
 
+**[TypeScript API Docs](https://adrianosela.github.io/tailscale-web/) | [Demo Playground](https://adrianosela.github.io/tailscale-web/demo/)**
+
 Run a [Tailscale](https://tailscale.com) device directly in the browser. Make HTTP requests, dial or listen for TCP connections, ping hosts, and use exit nodes for networking beyond Tailscale devices — all from a web page, with no server-side proxy required.
 
 <details>

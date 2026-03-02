@@ -4,7 +4,11 @@ import { resolve } from "path";
 export default defineConfig({
   assetsInclude: ["**/*.wasm"],
   server: {
+    cors: true,
     fs: { allow: ["../.."] },
+  },
+  preview: {
+    cors: true,
   },
   resolve: {
     alias: {

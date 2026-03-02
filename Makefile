@@ -23,8 +23,13 @@ demo: build-wasm ## Serve the dwmo with hot-reload (requires build-wasm first)
 	(cd examples/demo && ../../node_modules/.bin/vite)
 
 .PHONY: docs
-docs: ## Generate TypeDoc API reference (output: docs/)
+docs: ## Generate TypeDoc API reference and embed demo (output: docs/)
 	$(TYPEDOC)
+	(cd examples/demo && ../../$(VITE) build --config vite.config.docs.ts)
+
+.PHONY: preview-docs
+preview-docs: ## Serve the generated docs locally on http://localhost:4173
+	$(VITE) preview --outDir docs --port 4173
 
 .PHONY: clean
 clean: ## Remove build artifacts
