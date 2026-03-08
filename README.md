@@ -191,6 +191,15 @@ console.log("listening on port", listener.port)
 listener.close()
 ```
 
+### Local addresses
+
+`network.localIPv4()` / `network.localIPv6()` — Return this node's Tailscale IPv4 and IPv6 addresses. Both are synchronous and must be called after `init()` resolves. Return an empty string if the address is not yet assigned.
+
+```ts
+console.log(network.localIPv4()) // "100.x.x.x"
+console.log(network.localIPv6()) // "fd7a:115c:a1e0::x"
+```
+
 ### Exit nodes
 
 ```ts

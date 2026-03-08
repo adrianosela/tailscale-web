@@ -137,7 +137,7 @@ func Connect(ctx context.Context, cfg Config, onAuthRequired OnAuthRequired, onA
 		Dialer:        dialer,
 		SetSubsystem:  sys.Set,
 		ControlKnobs:  sys.ControlKnobs(),
-		HealthTracker: sys.HealthTracker(),
+		HealthTracker: sys.HealthTracker.Get(),
 		Metrics:       sys.UserMetricsRegistry(),
 		EventBus:      sys.Bus.Get(),
 	})
