@@ -15,21 +15,23 @@ import (
 	"github.com/adrianosela/tailscale-web/pkg/promise"
 	"github.com/adrianosela/tailscale-web/pkg/storage"
 	"github.com/breml/rootcerts/embedded"
+	"tailscale.com/envknob"
 )
-
-func init() {
-	// In the WASM environment there is no OS certificate store, so the Go TLS
-	// stack has no root CAs and rejects every HTTPS connection. Register the
-	// Mozilla root CA bundle as the fallback pool so that certificate chains
-	// signed by any publicly-trusted CA verify correctly.
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM([]byte(embedded.MozillaCACertificatesPEM()))
-	x509.SetFallbackRoots(pool)
-}
 
 var tsNet *network.Network
 
 func main() {
+	// In the WASM environment there is no OS certificate store, so the Go TLS
+	// stack has no root CAs and rejects every outbound HTTPS connection. Register
+	// the Mozilla root CA bundle as the fallback pool so that certificate chains
+	// signed by any publicly-trusted CA verify correctly.
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM([]byte(embedded.MozillaCACertificatesPEM()))
+	x509.SetFallbackRoots(pool)
+
+	// NOTE: This is only used when testing with github.com/adrianosela/tailscale.
+	envknob.Setenv("TS_DEBUG_WEBRTC_SIGNALING_URL", "ws://signaling.adrianosela.com/ws")
+
 	ns := jsutil.NewObject()
 	ns.Set("init", js.FuncOf(initFn))
 	ns.Set("ping", js.FuncOf(pingFn))
