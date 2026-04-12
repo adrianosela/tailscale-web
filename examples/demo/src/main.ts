@@ -857,6 +857,332 @@ el("btn-dns-refresh").addEventListener("click", () => {
   flashButton(el<HTMLButtonElement>("btn-dns-refresh"), "Updated!", "Refresh");
 });
 
+// ── iperf3 ────────────────────────────────────────────────────────────────────
+//
+// Implements an iperf3 TCP server. The browser acts as the iperf3 server;
+// run `iperf3 -c <tailscale-ip> -p <port>` from any tailnet peer to test
+// throughput over DERP or WebRTC.
+
+class BufferedReader {
+  private chunks: Uint8Array[] = [];
+  private available = 0;
+  private waiters: Array<{
+    n: number;
+    resolve: (d: Uint8Array) => void;
+    reject: (e: unknown) => void;
+  }> = [];
+
+  push(chunk: Uint8Array) {
+    this.chunks.push(chunk);
+    this.available += chunk.byteLength;
+    this.drain();
+  }
+
+  read(n: number): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+      this.waiters.push({ n, resolve, reject });
+      this.drain();
+    });
+  }
+
+  private drain() {
+    while (
+      this.waiters.length > 0 &&
+      this.available >= this.waiters[0]!.n
+    ) {
+      const { n, resolve } = this.waiters.shift()!;
+      resolve(this.consume(n));
+    }
+  }
+
+  private consume(n: number): Uint8Array {
+    const out = new Uint8Array(n);
+    let offset = 0;
+    while (offset < n) {
+      const chunk = this.chunks[0]!;
+      const take = Math.min(chunk.byteLength, n - offset);
+      out.set(chunk.subarray(0, take), offset);
+      offset += take;
+      if (take === chunk.byteLength) this.chunks.shift();
+      else this.chunks[0] = chunk.subarray(take);
+    }
+    this.available -= n;
+    return out;
+  }
+}
+
+interface Iperf3DataConn {
+  conn: Connection;
+  bytes: number;
+}
+
+interface Iperf3Session {
+  cookie: string;
+  controlConn: Connection;
+  controlReader: BufferedReader;
+  dataConns: Iperf3DataConn[];
+  numStreams: number;
+}
+
+const iperf3Sessions = new Map<string, Iperf3Session>();
+let iperf3Listener: Listener | null = null;
+
+// iperf3 v3 protocol state values (sent as single signed bytes)
+const I3_PARAM_EXCHANGE   = 9;
+const I3_CREATE_STREAMS   = 10;
+const I3_TEST_START       = 1;
+const I3_TEST_RUNNING     = 2;
+const I3_TEST_END         = 4;
+const I3_EXCHANGE_RESULTS = 13;
+const I3_DISPLAY_RESULTS  = 14;
+const I3_IPERF_DONE       = 15;
+
+function i3BE32(n: number): Uint8Array {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, n, false);
+  return b;
+}
+
+function i3FmtBytes(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GBytes`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)} MBytes`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)} KBytes`;
+  return `${n} Bytes`;
+}
+
+function i3FmtBits(bps: number): string {
+  if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbits/sec`;
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(2)} Mbits/sec`;
+  if (bps >= 1e3) return `${(bps / 1e3).toFixed(2)} Kbits/sec`;
+  return `${bps.toFixed(2)} bits/sec`;
+}
+
+async function handleIperf3Connection(conn: Connection) {
+  const reader = new BufferedReader();
+  // totalRx tracks every byte received on this connection. For data streams
+  // we use it to compute payload bytes (totalRx minus the 37-byte cookie).
+  let totalRx = 0;
+  conn.onData((data) => {
+    totalRx += data.byteLength;
+    reader.push(data);
+  });
+
+  // Every connection (control or data) begins with a 37-byte cookie
+  // (36 alphanumeric chars + NUL).
+  let cookieBuf: Uint8Array;
+  try {
+    cookieBuf = await reader.read(37);
+  } catch {
+    conn.close();
+    return;
+  }
+  const cookie = new TextDecoder().decode(cookieBuf.subarray(0, 36));
+
+  const existing = iperf3Sessions.get(cookie);
+  if (existing) {
+    // Data stream: payload bytes = everything received after the 37-byte cookie.
+    // Use a getter so the interval always reads the live value.
+    const dc = {
+      conn,
+      get bytes() {
+        return totalRx - 37;
+      },
+    } as Iperf3DataConn;
+    existing.dataConns.push(dc);
+    return;
+  }
+
+  // New control connection.
+  const session: Iperf3Session = {
+    cookie,
+    controlConn: conn,
+    controlReader: reader,
+    dataConns: [],
+    numStreams: 1,
+  };
+  iperf3Sessions.set(cookie, session);
+  try {
+    await runIperf3Session(session);
+  } catch (err) {
+    appendLine("iperf3-output", "line-err", `  error: ${err}`);
+  } finally {
+    iperf3Sessions.delete(cookie);
+    for (const dc of session.dataConns) dc.conn.close();
+    conn.close();
+  }
+}
+
+async function runIperf3Session(session: Iperf3Session) {
+  const { controlConn: ctrl, controlReader: reader } = session;
+
+  // Send PARAM_EXCHANGE; client replies with JSON params.
+  ctrl.write(new Uint8Array([I3_PARAM_EXCHANGE]));
+  const lenBuf = await reader.read(4);
+  const paramLen = new DataView(lenBuf.buffer).getUint32(0, false);
+  const jsonBuf = await reader.read(paramLen);
+  const params = JSON.parse(new TextDecoder().decode(jsonBuf));
+
+  const numStreams: number = params.parallel || 1;
+  const duration: number = params.time || 10;
+  const reverse: boolean = !!params.reverse;
+  session.numStreams = numStreams;
+
+  if (reverse) {
+    appendLine("iperf3-output", "line-err", "  reverse mode not supported");
+    return;
+  }
+
+  const blockSize = params.len ? `${params.len}B blocks` : "default blocks";
+  appendLine(
+    "iperf3-output",
+    "line-meta",
+    `→ test: ${numStreams} stream(s), ${duration}s, ${blockSize}`,
+  );
+
+  // Send CREATE_STREAMS; client opens data connections (same port, same cookie).
+  ctrl.write(new Uint8Array([I3_CREATE_STREAMS]));
+
+  const deadline = Date.now() + 5000;
+  while (session.dataConns.length < numStreams && Date.now() < deadline) {
+    await new Promise<void>((r) => setTimeout(r, 20));
+  }
+  if (session.dataConns.length < numStreams) {
+    appendLine(
+      "iperf3-output",
+      "line-err",
+      `  timeout: ${session.dataConns.length}/${numStreams} streams connected`,
+    );
+    return;
+  }
+
+  // Send TEST_START then TEST_RUNNING; client begins uploading data only after TEST_RUNNING.
+  const t0 = performance.now();
+  ctrl.write(new Uint8Array([I3_TEST_START]));
+  ctrl.write(new Uint8Array([I3_TEST_RUNNING]));
+  appendLine(
+    "iperf3-output",
+    "line-meta",
+    "  [ ID]  Interval            Transfer        Bandwidth",
+  );
+
+  let lastBytes = 0;
+  let intervalSec = 0;
+  const intervalId = setInterval(() => {
+    intervalSec++;
+    const totalBytes = session.dataConns.reduce((s, dc) => s + dc.bytes, 0);
+    const db = totalBytes - lastBytes;
+    appendLine(
+      "iperf3-output",
+      "line-recv",
+      `  [SUM]  ${(intervalSec - 1).toFixed(1)}-${intervalSec.toFixed(1)} sec  ${i3FmtBytes(db).padEnd(16)}  ${i3FmtBits(db * 8)}`,
+    );
+    lastBytes = totalBytes;
+  }, 1000);
+
+  // Wait for TEST_END from client.
+  const testEndBuf = await reader.read(1);
+  clearInterval(intervalId);
+
+  const elapsed = (performance.now() - t0) / 1000; // actual measured elapsed
+  const totalBytes = session.dataConns.reduce((s, dc) => s + dc.bytes, 0);
+
+  if (testEndBuf[0] !== I3_TEST_END) {
+    appendLine(
+      "iperf3-output",
+      "line-err",
+      `  unexpected state byte: ${testEndBuf[0]}`,
+    );
+    return;
+  }
+
+  appendLine(
+    "iperf3-output",
+    "line-ok",
+    `  [SUM]  0.0-${elapsed.toFixed(2)} sec  ${i3FmtBytes(totalBytes).padEnd(16)}  ${i3FmtBits((totalBytes * 8) / elapsed)}`,
+  );
+
+  // EXCHANGE_RESULTS: send state byte, then exchange JSON results.
+  ctrl.write(new Uint8Array([I3_EXCHANGE_RESULTS]));
+
+  // Read client results JSON (4-byte BE length + JSON).
+  const clientLenBuf = await reader.read(4);
+  const clientLen = new DataView(clientLenBuf.buffer).getUint32(0, false);
+  await reader.read(clientLen);
+
+  // Send server results JSON.
+  const serverResult = JSON.stringify({
+    cpu_util_total: 0,
+    cpu_util_user: 0,
+    cpu_util_system: 0,
+    sender_has_retransmits: 0,
+    streams: session.dataConns.map((dc, i) => ({
+      id: i + 1,
+      bytes: dc.bytes,
+      retransmits: -1,
+      jitter: 0,
+      errors: 0,
+      packets: 0,
+    })),
+  });
+  const serverResultBytes = new TextEncoder().encode(serverResult);
+  ctrl.write(i3BE32(serverResultBytes.byteLength));
+  ctrl.write(serverResultBytes);
+
+  ctrl.write(new Uint8Array([I3_DISPLAY_RESULTS]));
+  ctrl.write(new Uint8Array([I3_IPERF_DONE]));
+}
+
+el("btn-iperf3-start").addEventListener("click", async () => {
+  const btn = el<HTMLButtonElement>("btn-iperf3-start");
+  const port = parseInt(el<HTMLInputElement>("iperf3-port").value || "5201", 10);
+
+  hide("iperf3-error");
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+
+  try {
+    const listener = await network.listenTCP(port, (conn: Connection) => {
+      handleIperf3Connection(conn).catch((err) =>
+        appendLine("iperf3-output", "line-err", `error: ${err}`),
+      );
+    });
+
+    iperf3Listener = listener;
+    el("iperf3-output").textContent = "";
+    text("iperf3-assigned-port", String(listener.port));
+    appendLine(
+      "iperf3-output",
+      "line-meta",
+      `iperf3 server listening on port ${listener.port}…`,
+    );
+    const myIP =
+      network.localIPv4() || network.localIPv6() || "<tailscale-ip>";
+    appendLine(
+      "iperf3-output",
+      "line-meta",
+      `  run: iperf3 -c ${myIP} -p ${listener.port}`,
+    );
+
+    hide("iperf3-form");
+    show("iperf3-session");
+  } catch (err) {
+    showError("iperf3-error", String(err));
+    btn.disabled = false;
+    btn.textContent = "Start";
+  }
+});
+
+el("btn-iperf3-stop").addEventListener("click", () => {
+  iperf3Listener?.close();
+  iperf3Listener = null;
+  iperf3Sessions.clear();
+  appendLine("iperf3-output", "line-meta", "server stopped");
+  hide("iperf3-session");
+  show("iperf3-form");
+  el<HTMLButtonElement>("btn-iperf3-start").disabled = false;
+  el<HTMLButtonElement>("btn-iperf3-start").textContent = "Start";
+});
+
 // ── Code viewer ───────────────────────────────────────────────────────────────
 
 const codeSections: Record<string, [string, string]> = {
@@ -866,7 +1192,8 @@ const codeSections: Record<string, [string, string]> = {
   listen: ["// ── Listen ──", "// ── Serve HTTP ──"],
   serve: ["// ── Serve HTTP ──", "// ── Exit node selector ──"],
   routes: ["// ── Exit node selector ──", "// ── DNS ──"],
-  dns: ["// ── DNS ──", "// ── Code viewer ──"],
+  dns: ["// ── DNS ──", "// ── iperf3 ──"],
+  iperf3: ["// ── iperf3 ──", "// ── Code viewer ──"],
 };
 
 function getCodeSection(tab: string): string {
