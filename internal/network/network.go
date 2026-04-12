@@ -27,6 +27,13 @@ import (
 	"tailscale.com/types/logger"
 	"tailscale.com/wgengine"
 	"tailscale.com/wgengine/netstack"
+
+	// Link in the experimental WebRTC connectivity path. Its init registers
+	// magicsock.HookNewWebRTCManager; without this import the browser node's
+	// webrtcMgr stays nil and it silently drops incoming WebRTC offers,
+	// falling back to DERP. (tailscale-web builds the IPN stack directly and
+	// does not import feature/condregister, so we opt in explicitly here.)
+	_ "tailscale.com/feature/webrtc"
 )
 
 // Config holds configuration for the Tailscale node.

@@ -16,6 +16,7 @@ build-wasm: ## Compile Go to WASM (output: src/wasm/main.wasm)
 
 .PHONY: build-js
 build-js: ## Bundle the standard JS library with Vite (output: dist/, WASM separate)
+	npm install
 	$(VITE) build
 
 .PHONY: demo 
