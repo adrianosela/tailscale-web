@@ -423,6 +423,7 @@
           <button class="nav-tab"        data-tab="serve">Serve HTTP</button>
           <button class="nav-tab"        data-tab="routes">Routes</button>
           <button class="nav-tab"        data-tab="dns">DNS</button>
+          <button class="nav-tab"        data-tab="iperf3">iperf3</button>
           <button id="btn-view-code" class="btn-code" title="View source for this tab">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
@@ -676,6 +677,31 @@
                 </table>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- iperf3 -->
+        <div id="tab-iperf3" class="tab-panel" hidden>
+          <div class="card" id="iperf3-form">
+            <div id="iperf3-error" class="error-banner" hidden></div>
+            <div class="field-row">
+              <div class="field">
+                <label>Port <span style="font-weight:400;color:var(--text-muted)">(default 5201)</span></label>
+                <input id="iperf3-port" type="number" placeholder="5201" value="5201" min="1" max="65535" />
+              </div>
+              <div class="field" style="flex:0;display:flex;align-items:flex-end;">
+                <button id="btn-iperf3-start" class="btn btn-primary">Start</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="iperf3-session" hidden>
+            <div class="conn-bar">
+              <div class="conn-bar-dot"></div>
+              <span>iperf3 server on port <strong id="iperf3-assigned-port"></strong></span>
+              <button id="btn-iperf3-stop" class="btn btn-danger" style="margin-left:auto;padding:.2rem .6rem;font-size:.75rem;">Stop</button>
+            </div>
+            <div id="iperf3-output" class="output" style="min-height:120px;max-height:480px;overflow-y:auto;font-size:.75rem;"></div>
           </div>
         </div>
 

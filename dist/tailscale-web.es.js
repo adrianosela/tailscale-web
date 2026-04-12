@@ -424,14 +424,15 @@ const x = new URL("main.wasm", import.meta.url).href;
   const n = globalThis, h = "process";
   n[h] ? n[h].pid == null && (n[h].pid = 1) : n[h] = { pid: 1 };
 })();
-let _ = !1;
-async function b() {
-  if (_) return;
-  const n = new globalThis.Go(), h = await WebAssembly.instantiateStreaming(
-    fetch(x),
-    n.importObject
-  );
-  n.run(h.instance), _ = !0;
+let _ = null;
+function b() {
+  return _ || (_ = (async () => {
+    const n = new globalThis.Go(), h = await WebAssembly.instantiateStreaming(
+      fetch(x),
+      n.importObject
+    );
+    n.run(h.instance);
+  })()), _;
 }
 function u() {
   return globalThis.__tailscaleWeb;
