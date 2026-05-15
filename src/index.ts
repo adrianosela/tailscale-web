@@ -12,17 +12,20 @@ import wasmUrl from "./wasm/main.wasm";
   else if (g[k].pid == null) g[k].pid = 1;
 })();
 
-let wasmReady = false;
+let wasmReadyPromise: Promise<void> | null = null;
 
-async function ensureWasm(): Promise<void> {
-  if (wasmReady) return;
-  const go = new (globalThis as any).Go();
-  const result = await WebAssembly.instantiateStreaming(
-    fetch(wasmUrl),
-    go.importObject,
-  );
-  go.run(result.instance);
-  wasmReady = true;
+function ensureWasm(): Promise<void> {
+  if (!wasmReadyPromise) {
+    wasmReadyPromise = (async () => {
+      const go = new (globalThis as any).Go();
+      const result = await WebAssembly.instantiateStreaming(
+        fetch(wasmUrl),
+        go.importObject,
+      );
+      go.run(result.instance);
+    })();
+  }
+  return wasmReadyPromise;
 }
 
 function api(): any {
